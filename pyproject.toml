@@ -4,7 +4,7 @@ requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "IAdrive"
+name = "iadrive"
 version = "1.0.0"
 description = "A tool for archiving google drive files/folders and uploading them to the Internet Archive"
 readme = "README.md"
