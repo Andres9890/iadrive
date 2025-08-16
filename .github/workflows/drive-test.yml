@@ -26,4 +26,4 @@ jobs:
           IA_EMAIL: ${{ vars.IA_EMAIL }}
           IA_PASSWORD: ${{ vars.IA_PASSWORD }}
         run: |
-          iadrive "${{ github.event.inputs.drive_url }}" --dry-run
+          iadrive "${{ github.event.inputs.drive_url }}"
