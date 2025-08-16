@@ -2,7 +2,7 @@
 import argparse
 import logging
 import os
-from . import __version__
+from iadrive import __version__
 from .utils import parse_drive_id_and_type, collect_file_extensions, list_files_recursive
 from .drive import download_google_drive, try_get_drive_owners
 from .ia_upload import ensure_ia_configured_or_raise, compute_oldest_date_iso, build_metadata, upload_directory
