@@ -25,9 +25,7 @@ the google drive's content, makes the metadata, and then uploads to IA
 Requires Python 3.9 or newer
 
 ```bash
-git clone https://github.com/Andres9890/iadrive
-cd iadrive
-pip install -r requirements.txt
+pip install iadrive
 ```
 
 The package makes a console script named `iadrive` once installed, You can also install from the source using `pip install .`
