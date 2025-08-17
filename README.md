@@ -13,6 +13,12 @@ the google drive's content, makes the metadata, and then uploads to IA
 
 - Downloads files and/or folders from Google Drive using [gdown](https://github.com/wkentaro/gdown)
 - Extract file dates from images, PDFs, and media files to determine the creation date for the item
+- Pass custom metadata to Archive.org using `--metadata=<key:value>`
+- Supports quiet mode (`--quiet`) and debug mode (`--debug`) for log output
+- Automatically cleans up downloaded files after upload
+- Sanitizes identifiers and truncates subject tags to fit Archive.org requirements
+- Falls back to "IAdrive" as publisher if Google Drive collaborators can't be fetched
+- Improved error handling and debug output
 
 ## Installation
 
@@ -47,7 +53,7 @@ Optional envs:
 ```bash
 iadrive LINK [--identifier IDENTIFIER] [--collection COLLECTION]
              [--mediatype MEDIATYPE] [--dest DIRECTORY] [--dry-run]
-             [--log-level LEVEL]
+             [--log-level LEVEL] [--metadata=<key:value>...] [--quiet] [--debug]
 ```
 
 Arguments:
@@ -59,6 +65,9 @@ Arguments:
 - `--dest` – destination directory for downloaded files (default is `downloads`)
 - `--dry-run` – download and prepare metadata without uploading
 - `--log-level` – logging level (example, `DEBUG`, `INFO`, `WARNING`, `ERROR`)
+- `--metadata=<key:value>` – custom metadata to add to the Archive.org item (can be used multiple times)
+- `--quiet` – only print errors
+- `--debug` – print all logs to stdout (for troubleshooting)
 
 Example:
 
@@ -71,5 +80,7 @@ iadrive https://drive.google.com/drive/folders/placeholder --collection=mycol \
 
 1. `iadrive` uses `gdown` to fetch the specified Google Drive file or folder
 2. It walks the downloaded directory and extracts file extensions and dates using optional libraries such as Pillow, mutagen, and pypdf
-3. Metadata is assembled including a file listing, earliest embedded date, and original URL
+3. Metadata is assembled including a file listing (with sizes), earliest embedded date, and original URL. Identifiers are sanitized and subject tags are truncated to fit Archive.org requirements. If collaborators can't be fetched, publisher defaults to "IAdrive".
 4. The directory is uploaded to an Archive.org item using the `internetarchive` library
+5. Downloaded files are automatically cleaned up after upload
+6. Errors are handled gracefully, and debug output is available with `--debug`

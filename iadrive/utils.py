@@ -1,42 +1,78 @@
-
 import os
 import re
-import pathlib
-from typing import Tuple, Optional
+import time
+from datetime import datetime
+from pathlib import Path
+from collections import defaultdict
 
-def sanitize_name(name: str) -> str:
-    name = name.strip().replace(os.sep, "_")
-    return re.sub(r'[<>:"\\|?*\x00-\x1F]', "_", name)[:200]
 
-def parse_drive_id_and_type(url: str) -> Tuple[Optional[str], Optional[str]]:
-    ID_PATTERNS = [
-        (re.compile(r"https?://drive\.google\.com/drive/folders/([a-zA-Z0-9_\-]+)"), "folder"),
-        (re.compile(r"https?://drive\.google\.com/folderview\?id=([a-zA-Z0-9_\-]+)"), "folder"),
-        (re.compile(r"https?://drive\.google\.com/file/d/([a-zA-Z0-9_\-]+)"), "file"),
-        (re.compile(r"https?://drive\.google\.com/open\?id=([a-zA-Z0-9_\-]+)"), "file"),
-        (re.compile(r"https?://drive\.google\.com/uc\?id=([a-zA-Z0-9_\-]+)"), "file"),
-    ]
-    for pat, typ in ID_PATTERNS:
-        m = pat.search(url)
-        if m:
-            return m.group(1), typ
-    m = re.search(r"[?&]id=([a-zA-Z0-9_\-]+)", url)
-    if m:
-        return m.group(1), "file"
-    return None, None
+def key_value_to_dict(lst):
+    """Convert key:value pair strings into a dictionary"""
+    if not lst:
+        return {}
+    
+    if not isinstance(lst, list):
+        lst = [lst]
+    
+    result = defaultdict(list)
+    for item in lst:
+        if ':' not in item:
+            continue
+        key, value = item.split(':', 1)
+        if value and value not in result[key]:
+            result[key].append(value)
+        elif not result[key]:
+            result[key] = [value]
+    
+    return {k: v if len(v) > 1 else v[0] for k, v in result.items()}
 
-def collect_file_extensions(root: str) -> list:
-    exts = set()
-    for p in pathlib.Path(root).rglob("*"):
-        if p.is_file():
-            ext = p.suffix.lower().lstrip(".")
-            if ext:
-                exts.add(ext)
-    return sorted(exts)
 
-def list_files_recursive(root: str) -> list:
-    paths = []
-    for p in pathlib.Path(root).rglob("*"):
-        if p.is_file():
-            paths.append(str(p))
-    return paths
+def sanitize_identifier(identifier, replacement='-'):
+    """Sanitize identifier for Internet Archive"""
+    # IA identifiers must be lowercase alphanumeric with hyphens/underscores
+    identifier = identifier.lower()
+    identifier = re.sub(r'[^\w-]', replacement, identifier)
+    # Remove consecutive hyphens
+    identifier = re.sub(r'-+', '-', identifier)
+    # Remove leading/trailing hyphens
+    identifier = identifier.strip('-')
+    return identifier
+
+
+def get_oldest_file_date(files):
+    """Get the oldest file modification date"""
+    oldest_timestamp = float('inf')
+    
+    for file_path in files:
+        if os.path.exists(file_path):
+            mtime = os.path.getmtime(file_path)
+            if mtime < oldest_timestamp:
+                oldest_timestamp = mtime
+    
+    if oldest_timestamp == float('inf'):
+        # Fallback to current date
+        oldest_timestamp = time.time()
+    
+    dt = datetime.fromtimestamp(oldest_timestamp)
+    return dt.strftime('%Y-%m-%d'), dt.strftime('%Y')
+
+
+def extract_file_types(files):
+    """Extract unique file extensions from file list"""
+    extensions = set()
+    for file_path in files:
+        ext = Path(file_path).suffix.lower().lstrip('.')
+        if ext:
+            extensions.add(ext)
+    return sorted(list(extensions))
+
+
+def get_collaborators(drive_id):
+    """
+    Get collaborators for a Google Drive file/folder
+    Note: This would require Google Drive API access in a real implementation
+    For now, returns None to fall back to "IAdrive"
+    """
+    # TODO: Implement Google Drive API integration to get collaborators
+    # This would require OAuth2 setup and drive API calls
+    return None

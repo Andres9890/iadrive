@@ -1,28 +1,52 @@
-
 [build-system]
-requires = ["setuptools>=68.0"]
+requires = ["setuptools>=61.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "iadrive"
-version = "1.0.0"
-description = "A tool for archiving google drive files/folders and uploading them to the Internet Archive"
+dynamic = ["version"]
+description = "Download Google Drive files/folders and upload them to the Internet Archive"
+authors = [
+    {name = "Andres99", email = "fndres195@gmail.com"}
+]
 readme = "README.md"
-requires-python = ">=3.8"
-authors = [{name = "Andres99"}]
-keywords = ["internet-archive", "google-drive", "archiving", "backup"]
-license = {text = "MIT"}
+requires-python = ">=3.9"
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = [
     "internetarchive>=5.5.0",
     "gdown>=5.2.0",
-    "google-api-python-client>=2.179.0",
-    "google-auth>=2.40.3",
-    "google-auth-httplib2>=0.2.0",
-    "google-auth-oauthlib>=1.2.2",
+    "docopt-ng>=0.9.0",
+    "python-dateutil>=2.9.0.post0",
+]
+keywords = [
+    "archive.org",
+    "archiving", 
+    "google drive",
+    "internet archive",
+    "file mirroring",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10", 
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Utilities",
 ]
 
-[project.scripts]
-iadrive = "iadrive.cli:main"
+[project.urls]
+homepage = "https://github.com/Andres9890/iadrive"
+source = "https://github.com/Andres9890/iadrive.git"
+issues = "https://github.com/Andres9890/iadrive/issues"
 
-[tool.setuptools.packages.find]
-where = ["iadrive"]
+[project.scripts]
+iadrive = "iadrive.__main__:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "iadrive.__version__"}
