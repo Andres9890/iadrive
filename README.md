@@ -1,10 +1,14 @@
 [License Button]: https://img.shields.io/badge/License-MIT-black
 [License Link]: https://github.com/Andres9890/iadrive/blob/main/LICENSE 'MIT License.'
 
+[PyPI Button]: https://img.shields.io/pypi/v/iadrive?color=yellow&label=PyPI
+[PyPI Link]: https://pypi.org/project/iadrive/ 'PyPI Package.'
+
 # IAdrive
 [![Lint](https://github.com/Andres9890/iadrive/actions/workflows/lint.yml/badge.svg)](https://github.com/Andres9890/iadrive/actions/workflows/lint.yml)
 [![Unit Tests](https://github.com/Andres9890/iadrive/actions/workflows/unit-test.yml/badge.svg)](https://github.com/Andres9890/iadrive/actions/workflows/unit-test.yml)
 [![License Button]][License Link]
+[![PyPI Button]][PyPI Link]
 
 IAdrive is A tool for archiving google drive files/folders and uploading them to the [Internet Archive](https://archive.org/), it downloads
 the google drive's content, makes the metadata, and then uploads to IA
