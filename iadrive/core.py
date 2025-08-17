@@ -123,7 +123,7 @@ class IAdrive:
         file_types = extract_file_types(files)
         
         # Get collaborators (this would need Google Drive API access in a real implementation)
-        publisher = get_collaborators(drive_id) or "IAdrive"
+        creator = get_collaborators(drive_id) or "IAdrive"
         
         # Create file listing for description
         description_lines = ["Files included in this archive:"]
@@ -149,7 +149,7 @@ class IAdrive:
             'description': description,
             'date': oldest_date,
             'year': oldest_year,
-            'publisher': publisher,
+            'creator': creator,
             'subject': subject,
             'filecount': str(len(files)),
             'originalurl': original_url,
