@@ -1,0 +1,14 @@
+{
+    "test_folder": {
+        "name": "Test Folder",
+        "files": [
+            {"name": "file1.txt", "content": "Test content 1"},
+            {"name": "file2.pdf", "content": "Test PDF content"},
+            {"name": "subfolder/file3.docx", "content": "Test document content"}
+        ]
+    },
+    "test_file": {
+        "name": "test_document.txt",
+        "content": "Single file content"
+    }
+}
