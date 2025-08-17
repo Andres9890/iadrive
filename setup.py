@@ -1,5 +1,12 @@
 from setuptools import setup, find_packages
-from iadrive import __version__
+
+# Read version from file instead of importing
+def get_version():
+    with open("iadrive/__init__.py", "r") as f:
+        for line in f:
+            if line.startswith("__version__"):
+                return line.split("=")[1].strip().strip('"').strip("'")
+    raise RuntimeError("Unable to find version string.")
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
@@ -9,7 +16,7 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
 
 setup(
     name="iadrive",
-    version=__version__,
+    version=get_version(),
     author="Andres99",
     author_email="fndres195@gmail.com",
     description="Download Google Drive files/folders and upload them to the Internet Archive",
