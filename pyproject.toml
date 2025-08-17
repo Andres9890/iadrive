@@ -11,8 +11,7 @@ authors = [
 ]
 readme = "README.md"
 requires-python = ">=3.9"
-license = "MIT"
-license-files = ["LICENSE"]
+license = {text = "MIT"}
 dependencies = [
     "internetarchive>=5.5.0",
     "gdown>=5.2.0",
