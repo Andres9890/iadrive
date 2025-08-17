@@ -11,9 +11,6 @@ def get_version():
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
-with open("requirements.txt", "r", encoding="utf-8") as fh:
-    requirements = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
-
 setup(
     name="iadrive",
     version=get_version(),
@@ -36,7 +33,12 @@ setup(
         "Programming Language :: Python :: 3.12",
     ],
     python_requires=">=3.9",
-    install_requires=requirements,
+    install_requires=[
+        "internetarchive>=5.5.0",
+        "gdown>=5.2.0",
+        "docopt-ng>=0.9.0",
+        "python-dateutil>=2.9.0.post0",
+    ],
     entry_points={
         "console_scripts": [
             "iadrive=iadrive.__main__:main",
