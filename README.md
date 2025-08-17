@@ -2,6 +2,8 @@
 [License Link]: https://github.com/Andres9890/iadrive/blob/main/LICENSE 'MIT License.'
 
 # IAdrive
+[![Lint](https://github.com/Andres9890/iadrive/actions/workflows/lint.yml/badge.svg)](https://github.com/Andres9890/iadrive/actions/workflows/lint.yml)
+[![Unit Tests](https://github.com/Andres9890/iadrive/actions/workflows/unit-test.yml/badge.svg)](https://github.com/Andres9890/iadrive/actions/workflows/unit-test.yml)
 [![License Button]][License Link]
 
 IAdrive is A tool for archiving google drive files/folders and uploading them to the [Internet Archive](https://archive.org/), it downloads
