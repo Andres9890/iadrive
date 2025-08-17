@@ -1,0 +1,62 @@
+VERSION=$(shell python -c "exec(open('iadrive/__init__.py').read()); print(__version__)")
+
+binary:
+	pex . --python=python3 --python-shebang='/usr/bin/env python3' -e iadrive.__main__:main -o iadrive-$(VERSION)-py3-none-any.pex
+
+clean-pyc:
+	find . -name '*.pyc' -exec rm -f {} +
+	find . -name '*.pyo' -exec rm -f {} +
+	find . -name '*~' -exec rm -f {} +
+	find . -name '__pycache__' -exec rm -fr {} +
+
+clean-build:
+	rm -fr build/
+	rm -fr dist/
+	rm -fr *.egg-info
+
+clean: clean-pyc clean-build
+
+lint:
+	flake8
+
+test: clean-pyc
+	pytest --cov
+
+test-all:
+	pytest --cov --cov-report=html --cov-report=term
+
+build: clean
+	python -m build
+
+install:
+	pip install -e .
+
+install-dev:
+	pip install -e .
+	pip install -r test-requirements.txt
+
+publish-test: build
+	python -m twine upload --repository testpypi dist/*
+
+publish: build
+	git tag -a v$(VERSION) -m 'version $(VERSION)'
+	git push --tags
+	python -m twine upload dist/*
+
+help:
+	@echo "Available targets:"
+	@echo "  binary       - Build a PEX executable"
+	@echo "  clean        - Remove build artifacts and Python cache files"
+	@echo "  clean-pyc    - Remove Python cache files"
+	@echo "  clean-build  - Remove build directories"
+	@echo "  lint         - Run flake8 linting"
+	@echo "  test         - Run tests with coverage"
+	@echo "  test-all     - Run tests with coverage and HTML report"
+	@echo "  build        - Build wheel and source distribution"
+	@echo "  install      - Install package in development mode"
+	@echo "  install-dev  - Install package and test dependencies"
+	@echo "  publish-test - Upload to TestPyPI"
+	@echo "  publish      - Tag version and upload to PyPI"
+	@echo "  help         - Show this help message"
+
+.PHONY: binary clean-pyc clean-build clean lint test test-all build install install-dev publish-test publish help
