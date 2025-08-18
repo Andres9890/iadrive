@@ -126,7 +126,7 @@ class IAdrive:
         creator = get_collaborators(drive_id) or "IAdrive"
         
         # Create file listing for description
-        description_lines = ["Files included in this archive:"]
+        description_lines = ["Files included:"]
         for file_path in files:
             rel_path = os.path.relpath(file_path, os.path.dirname(files[0]))
             file_size = os.path.getsize(file_path)
@@ -153,7 +153,7 @@ class IAdrive:
             'subject': subject,
             'filecount': str(len(files)),
             'originalurl': original_url,
-            'scanner': f'IAdrive Google Drive File Mirroring Application v{__version__}'
+            'scanner': f'IAdrive Google Drive File Mirroring Application {__version__}'
         }
         
         if custom_meta:
