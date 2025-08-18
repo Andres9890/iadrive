@@ -76,3 +76,19 @@ def get_collaborators(drive_id):
     # TODO: Implement Google Drive API integration to get collaborators
     # This would require OAuth2 setup and drive API calls
     return None
+
+
+def get_latest_pypi_version(package_name="iadrive"):
+    """
+    Request PyPI for the latest version
+    Returns the version string, or None if it cannot be determined
+    """
+    import json
+    import urllib.request
+    try:
+        url = f"https://pypi.org/pypi/{package_name}/json"
+        with urllib.request.urlopen(url, timeout=5) as response:
+            data = json.load(response)
+            return data["info"]["version"]
+    except Exception:
+        return None

@@ -15,7 +15,6 @@ setup(
     name="iadrive",
     version=get_version(),
     author="Andres99",
-    author_email="fndres195@gmail.com",
     description="Download Google Drive files/folders and upload them to the Internet Archive",
     long_description=long_description,
     long_description_content_type="text/markdown",

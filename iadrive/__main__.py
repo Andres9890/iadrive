@@ -23,7 +23,7 @@ import logging
 import traceback
 
 from iadrive.core import IAdrive
-from iadrive.utils import key_value_to_dict
+from iadrive.utils import key_value_to_dict, get_latest_pypi_version
 from iadrive import __version__
 
 
@@ -62,6 +62,12 @@ def main():
             traceback.print_exc()
         print('\033[0m')
         sys.exit(1)
+    finally:
+        # Version check after upload attempt (success or fail)
+        latest_version = get_latest_pypi_version()
+        if latest_version and latest_version != __version__:
+            print(f"\033[93mA newer version of IAdrive is available: \033[92m{latest_version}\033[0m")
+            print("Update with: pip install --upgrade iadrive\n")
 
 
 if __name__ == '__main__':
