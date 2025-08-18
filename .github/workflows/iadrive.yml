@@ -1,4 +1,4 @@
-name: Archive Video to IA
+name: Archive Drive link to IA
 
 on:
   workflow_dispatch:
@@ -43,6 +43,6 @@ jobs:
       run: |
         printf "%s\n%s\n" "$IA_EMAIL" "$IA_PASSWORD" | ia configure
 
-    - name: Run tubeup
+    - name: Run iadrive
       run: |
         iadrive "${{ github.event.inputs.url }}"
