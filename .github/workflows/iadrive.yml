@@ -1,0 +1,48 @@
+name: Archive Video to IA
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'drive URL to archive'
+        required: true
+        default: 'https://drive'
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v5
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+
+    - name: Cache pip
+      uses: actions/cache@v4.2.3
+      with:
+        path: |
+          ~/.cache/pip
+        key: ${{ runner.os }}-archive-cache-${{ hashFiles('.github/workflows/tubeup.yml') }}
+        restore-keys: |
+          ${{ runner.os }}-archive-cache-
+
+    - name: Install iadrive and IA CLI
+      run: |
+        python -m pip install --upgrade pip
+        pip install internetarchive
+        pip install iadrive==1.0.0
+
+    - name: Configure IA CLI
+      env:
+        IA_EMAIL: ${{ secrets.IA_EMAIL }}
+        IA_PASSWORD: ${{ secrets.IA_PASSWORD }}
+      run: |
+        printf "%s\n%s\n" "$IA_EMAIL" "$IA_PASSWORD" | ia configure
+
+    - name: Run tubeup
+      run: |
+        iadrive "${{ github.event.inputs.url }}"
