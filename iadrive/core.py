@@ -244,12 +244,11 @@ class IAdrive:
         
         # Upload files
         try:
-            # Upload each file with its intended name
-            for dest_name, source_path in upload_files.items():
-                if self.verbose:
-                    print(f"  Uploading: {dest_name}")
-                item.upload(source_path, metadata=metadata, 
-                           target=dest_name, retries=3, verbose=self.verbose)
+            if self.verbose:
+                print(f"  Uploading {len(upload_files)} files...")
+            
+            response = item.upload(upload_files, metadata=metadata, 
+                                 retries=3, verbose=self.verbose)
             
             if self.verbose:
                 print(f"Successfully uploaded {len(upload_files)} files")
