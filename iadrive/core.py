@@ -171,7 +171,7 @@ class IAdrive:
         
         metadata = {
             'mediatype': 'data',
-            'collection': 'opensource',
+            'collection': 'opensource_media',
             'title': title,
             'description': description,
             'date': oldest_date,
