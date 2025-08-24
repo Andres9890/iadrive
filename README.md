@@ -18,6 +18,7 @@ the google drive's content, makes the metadata, and then uploads to IA
 ## Features
 
 - Downloads files and/or folders from Google Drive using [gdown](https://github.com/wkentaro/gdown)
+- Preserves folder structure when uploading (can be disabled with `--disable-slash-files`)
 - Extract file modification dates to determine the creation date for the item
 - Pass custom metadata to Archive.org using `--metadata=<key:value>`
 - Supports quiet mode (`--quiet`) and debug mode (`--debug`) for log output
@@ -52,7 +53,7 @@ Optional envs:
 ## Usage
 
 ```bash
-iadrive <url> [--metadata=<key:value>...] [--quiet] [--debug]
+iadrive <url> [--metadata=<key:value>...] [--disable-slash-files] [--quiet] [--debug]
 ```
 
 Arguments:
@@ -62,22 +63,57 @@ Arguments:
 Options:
 
 - `--metadata=<key:value>` – custom metadata to add to the Archive.org item (can be used multiple times)
+- `--disable-slash-files` – upload files without preserving folder structure
 - `--quiet` – only print errors
 - `--debug` – print all logs to stdout (for troubleshooting)
 
-Example:
+Examples:
 
 ```bash
-iadrive https://drive.google.com/drive/folders/placeholder --metadata=collection:mycol \
+# Upload with folder structure preserved (default)
+iadrive https://drive.google.com/drive/folders/placeholder --metadata=collection:placeholder
+
+# Upload with flat structure
+iadrive https://drive.google.com/drive/folders/placeholder --disable-slash-files
+
+# Debug mode with custom metadata
+iadrive https://drive.google.com/drive/folders/placeholder --metadata=collection:placeholder \
         --metadata=mediatype:data --debug
 ```
+
+## Folder Structure Preservation
+
+By default, IAdrive preserves the folder structure from Google Drive when uploading to Internet Archive, For example, if your Google Drive link contains:
+
+```
+placeholder.txt
+placeholder.mp3
+folder/
+  ├── placeholder.pdf
+  └── folder/
+      └── placeholder.mp4
+```
+
+The files will be uploaded to Internet Archive as:
+- `placeholder.txt`
+- `placeholder.mp3`
+- `folder/placeholder.pdf`
+- `folder/folder/placeholder.mp4`
+
+If you use the `--disable-slash-files` command argument, all files will be uploaded to the root level:
+- `file1.txt`
+- `file2.txt`
+- `document.pdf`
+- `data.csv`
+
+Note: When using flat structure, duplicate filenames are automatically handled by adding a number (e.g., `placeholder.pdf`, `placeholder_1.pdf`).
 
 ## How it works
 
 1. `iadrive` uses `gdown` to fetch the specified Google Drive file or folder
 2. It walks the downloaded directory and extracts file extensions and modification dates
 3. Metadata is assembled including a file listing (with sizes), oldest file modification date, and original URL. Identifiers are sanitized and subject tags are truncated to fit Archive.org requirements. Publisher defaults to "IAdrive" since collaborator fetching is not yet implemented.
-4. The directory is uploaded to an Archive.org item using the `internetarchive` library with a fixed identifier format `drive-{drive-id}`, collection `opensource`, and mediatype `data`
+4. The directory is uploaded to an Archive.org item using the `internetarchive` library with a fixed identifier format `drive-{drive-id}`, collection `opensource`, and mediatype `data`, Folder structure is preserved by default (can be disabled with `--disable-slash-files`)
 5. Downloaded files are automatically cleaned up after upload
 6. Errors are handled gracefully, and debug output is available with `--debug`
 
