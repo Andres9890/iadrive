@@ -117,6 +117,10 @@ Note: When using flat structure, duplicate filenames are automatically handled b
 5. Downloaded files are automatically cleaned up after upload
 6. Errors are handled gracefully, and debug output is available with `--debug`
 
+## Supported Platforms
+
+For a list of supported platforms for archiving, please see [`SUPPORTEDPLATFORMS.md`](SUPPORTEDPLATFORMS.md)
+
 ## To-do list
 
 - Google Drive collaborator fetching to use as creator metadata through the Google API
