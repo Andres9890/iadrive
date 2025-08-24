@@ -169,6 +169,12 @@ class IAdrive:
             subject_tags.pop()
             subject = ";".join(subject_tags) + ";"
         
+        # Add foldercount metadata (if any folders are present)
+        folder_paths = set()
+        for rel_path in file_map.keys():
+            folder = os.path.dirname(rel_path)
+            if folder and folder != '.':
+                folder_paths.add(folder)
         metadata = {
             'mediatype': 'data',
             'collection': 'opensource_media',
@@ -180,7 +186,8 @@ class IAdrive:
             'subject': subject,
             'filecount': str(len(files)),
             'originalurl': original_url,
-            'scanner': f'IAdrive Google Drive File Mirroring Application {__version__}'
+            'scanner': f'IAdrive Google Drive File Mirroring Application {__version__}',
+            **({'foldercount': str(len(folder_paths))} if folder_paths else {})
         }
         
         if custom_meta:
