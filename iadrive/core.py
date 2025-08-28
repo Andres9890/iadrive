@@ -5,6 +5,8 @@ import time
 import logging
 import subprocess
 import internetarchive
+import urllib.request
+import urllib.error
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
@@ -32,6 +34,37 @@ class IAdrive:
         
         if not verbose:
             self.logger.setLevel(logging.ERROR)
+        
+        # Google Docs export formats
+        self.docs_formats = {
+            'document': {
+                'pdf': 'PDF',
+                'docx': 'Microsoft Word',
+                'odt': 'OpenDocument Text',
+                'rtf': 'Rich Text Format',
+                'txt': 'Plain Text',
+                'html': 'HTML',
+                'epub': 'EPUB'
+            },
+            'spreadsheets': {
+                'xlsx': 'Microsoft Excel',
+                'ods': 'OpenDocument Spreadsheet',
+                'pdf': 'PDF',
+                'csv': 'CSV (first sheet)',
+                'tsv': 'TSV (first sheet)',
+                'html': 'HTML'
+            },
+            'presentation': {
+                'pdf': 'PDF',
+                'pptx': 'Microsoft PowerPoint',
+                'odp': 'OpenDocument Presentation',
+                'txt': 'Plain Text',
+                'jpeg': 'JPEG (slides as images)',
+                'png': 'PNG (slides as images)',
+                'svg': 'SVG (slides as images)'
+            }
+        }
+        
     
     def check_dependencies(self):
         """Check if required dependencies are installed and configured"""
@@ -49,8 +82,46 @@ class IAdrive:
         except Exception as e:
             raise Exception(f"Internet Archive configuration error: {e}")
     
+    def is_google_docs_url(self, url):
+        """Check if URL is a Google Docs/Sheets/Slides URL"""
+        docs_patterns = [
+            r'docs\.google\.com/document',
+            r'docs\.google\.com/spreadsheets',
+            r'docs\.google\.com/presentation'
+        ]
+        return any(re.search(pattern, url) for pattern in docs_patterns)
+    
+    def get_google_docs_type(self, url):
+        """Determine the type of Google Docs URL"""
+        if 'docs.google.com/document' in url:
+            return 'document'
+        elif 'docs.google.com/spreadsheets' in url:
+            return 'spreadsheets'
+        elif 'docs.google.com/presentation' in url:
+            return 'presentation'
+        else:
+            return None
+    
+    def extract_docs_id(self, url):
+        """Extract Google Docs ID from URL"""
+        patterns = [
+            r'/document/d/([a-zA-Z0-9-_]+)',
+            r'/spreadsheets/d/([a-zA-Z0-9-_]+)',
+            r'/presentation/d/([a-zA-Z0-9-_]+)',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, url)
+            if match:
+                return match.group(1)
+        
+        raise ValueError(f"Could not extract Google Docs ID from URL: {url}")
+    
     def extract_drive_id(self, url):
         """Extract Google Drive file/folder ID from URL"""
+        if self.is_google_docs_url(url):
+            return self.extract_docs_id(url)
+        
         patterns = [
             r'/folders/([a-zA-Z0-9-_]+)',
             r'/file/d/([a-zA-Z0-9-_]+)',
@@ -68,29 +139,111 @@ class IAdrive:
         """Check if URL is a Google Drive folder"""
         return '/folders/' in url
     
-    def download_drive_content(self, url):
-        """Download Google Drive file or folder using gdown"""
-        import gdown
+    def download_google_doc(self, url, doc_id, doc_type, formats=None):
+        """Download Google Doc in all available formats for preservation"""
+        all_formats = list(self.docs_formats.get(doc_type, {}).keys())
         
-        drive_id = self.extract_drive_id(url)
-        download_path = os.path.join(self.dir_path, f"drive-{drive_id}")
+        if not all_formats:
+            raise Exception(f"No formats available for document type: {doc_type}")
+        
+        download_path = os.path.join(self.dir_path, f"docs-{doc_id}")
+        os.makedirs(download_path, exist_ok=True)
         
         if self.verbose:
-            print(f"Downloading from: {url}")
+            print(f"Downloading Google {doc_type.title()} from: {url}")
+            print(f"Exporting ALL {len(all_formats)} available formats: {', '.join(all_formats)}")
             print(f"Download path: {download_path}")
         
+        downloaded_files = []
+        
+        # Get document title from the original URL (try to fetch HTML and extract title)
+        doc_title = self.get_google_docs_title(url, doc_id)
+        
+        for fmt in all_formats:
+            # All formats in docs_formats are valid by definition
+            try:
+                export_url = f"https://docs.google.com/{doc_type}/d/{doc_id}/export?format={fmt}"
+                
+                # Create filename
+                safe_title = re.sub(r'[^\w\s-]', '', doc_title)[:50]
+                filename = f"{safe_title}.{fmt}" if safe_title else f"{doc_type}_{doc_id}.{fmt}"
+                file_path = os.path.join(download_path, filename)
+                
+                if self.verbose:
+                    print(f"  Downloading {fmt.upper()}: {filename}")
+                
+                # Download the file
+                urllib.request.urlretrieve(export_url, file_path)
+                
+                # Check if file was downloaded successfully and has content
+                if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
+                    downloaded_files.append(file_path)
+                    if self.verbose:
+                        size_mb = os.path.getsize(file_path) / (1024 * 1024)
+                        print(f"    Downloaded successfully ({size_mb:.2f} MB)")
+                else:
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                    if self.verbose:
+                        print(f"    Failed to download or empty file")
+                        
+            except Exception as e:
+                if self.verbose:
+                    print(f"  Error downloading {fmt}: {e}")
+                continue
+        
+        if not downloaded_files:
+            raise Exception(f"Failed to download Google {doc_type} in any format")
+        
+        return download_path, doc_id, downloaded_files
+    
+    def get_google_docs_title(self, url, doc_id):
+        """Try to get title of Google Doc"""
         try:
-            if self.is_folder_url(url):
-                # Download folder
-                gdown.download_folder(url, output=download_path, quiet=not self.verbose)
-            else:
-                # Download single file
-                os.makedirs(download_path, exist_ok=True)
-                gdown.download(url, output=download_path, quiet=not self.verbose, fuzzy=True)
+            # Try to fetch the document page and extract title
+            response = urllib.request.urlopen(url, timeout=10)
+            html = response.read().decode('utf-8', errors='ignore')
             
-            return download_path, drive_id
-        except Exception as e:
-            raise Exception(f"Failed to download from Google Drive: {e}")
+            # Look for title in HTML
+            title_match = re.search(r'<title>([^<]+)</title>', html, re.IGNORECASE)
+            if title_match:
+                title = title_match.group(1)
+                # Remove " - Google Docs/Sheets/Slides" suffix
+                title = re.sub(r' - Google (Docs|Sheets|Slides).*$', '', title)
+                return title.strip()
+        except:
+            pass
+        
+        # Fallback to document ID
+        return f"document_{doc_id}"
+    
+    def download_drive_content(self, url, formats=None):
+        """Download Google Drive file/folder or Google Docs using gdown or direct export"""
+        if self.is_google_docs_url(url):
+            doc_id = self.extract_docs_id(url)
+            doc_type = self.get_google_docs_type(url)
+            return self.download_google_doc(url, doc_id, doc_type)  # No formats parameter needed
+        else:
+            # Handle regular Google Drive files/folders
+            import gdown
+            
+            drive_id = self.extract_drive_id(url)
+            download_path = os.path.join(self.dir_path, f"drive-{drive_id}")
+            
+            if self.verbose:
+                print(f"Downloading from: {url}")
+                print(f"Download path: {download_path}")
+            
+            try:
+                if self.is_folder_url(url):
+                    gdown.download_folder(url, output=download_path, quiet=not self.verbose)
+                else:
+                    os.makedirs(download_path, exist_ok=True)
+                    gdown.download(url, output=download_path, quiet=not self.verbose, fuzzy=True)
+                
+                return download_path, drive_id, None
+            except Exception as e:
+                raise Exception(f"Failed to download from Google Drive: {e}")
     
     def get_file_list_with_structure(self, path):
         """
@@ -120,7 +273,7 @@ class IAdrive:
         file_map = self.get_file_list_with_structure(path)
         return list(file_map.values())
     
-    def create_metadata(self, file_map, drive_id, original_url, custom_meta=None):
+    def create_metadata(self, file_map, drive_id, original_url, custom_meta=None, is_google_docs=False, doc_type=None):
         """Create Internet Archive metadata from downloaded files"""
         if not file_map:
             raise Exception("No files found to upload")
@@ -131,7 +284,13 @@ class IAdrive:
         oldest_date, oldest_year = get_oldest_file_date(files)
         
         # Determine title
-        if len(files) == 1 and os.path.isfile(files[0]):
+        if is_google_docs:
+            # For Google Docs, we try to get a title from the first file
+            first_file = list(file_map.keys())[0]
+            title = os.path.splitext(first_file)[0]  # Remove extension
+            if title.startswith(f"{doc_type}_"):
+                title = title.replace(f"{doc_type}_", "").replace(drive_id, "Document")
+        elif len(files) == 1 and os.path.isfile(files[0]):
             # Single file
             title = os.path.basename(files[0])
         else:
@@ -147,7 +306,12 @@ class IAdrive:
         creator = get_collaborators(drive_id) or "IAdrive"
         
         # Create file listing for description with folder structure
-        description_lines = ["Files included:"]
+        description_lines = []
+        if is_google_docs:
+            description_lines.append(f"Google {doc_type.title()} exported in:")
+        else:
+            description_lines.append("Files included:")
+            
         for rel_path, abs_path in sorted(file_map.items()):
             file_size = os.path.getsize(abs_path)
             # Format size for readability
@@ -157,11 +321,22 @@ class IAdrive:
                 size_str = f"{file_size / 1024:.2f} KB"
             else:
                 size_str = f"{file_size} bytes"
-            description_lines.append(f"- {rel_path} ({size_str})")
+            
+            if is_google_docs:
+                # For Google Docs, show format information
+                ext = os.path.splitext(rel_path)[1].lstrip('.')
+                format_desc = self.docs_formats.get(doc_type, {}).get(ext, ext.upper())
+                description_lines.append(f"- {rel_path} ({format_desc}, {size_str})")
+            else:
+                description_lines.append(f"- {rel_path} ({size_str})")
+                
         description = "<br>".join(description_lines)
         
         # Create subject tags
-        subject_tags = ["google", "drive"] + file_types
+        if is_google_docs:
+            subject_tags = ["google", doc_type, "document"] + file_types
+        else:
+            subject_tags = ["google", "drive"] + file_types
         subject = ";".join(subject_tags) + ";"
         
         # Truncate subject if too long (IA limit is 255 bytes)
@@ -175,9 +350,18 @@ class IAdrive:
             folder = os.path.dirname(rel_path)
             if folder and folder != '.':
                 folder_paths.add(folder)
+                
+        # Set collection and mediatype based on content type
+        if is_google_docs:
+            collection = 'opensource_media'
+            mediatype = 'texts' if doc_type in ['document'] else 'data'
+        else:
+            collection = 'opensource_media'
+            mediatype = 'data'
+                
         metadata = {
-            'mediatype': 'data',
-            'collection': 'opensource_media',
+            'mediatype': mediatype,
+            'collection': collection,
             'title': title,
             'description': description,
             'date': oldest_date,
@@ -187,7 +371,8 @@ class IAdrive:
             'filecount': str(len(files)),
             'originalurl': original_url,
             'scanner': f'IAdrive Google Drive File Mirroring Application {__version__}',
-            **({'foldercount': str(len(folder_paths))} if folder_paths else {})
+            **({'foldercount': str(len(folder_paths))} if folder_paths else {}),
+            **({'doctype': doc_type} if is_google_docs else {})
         }
         
         if custom_meta:
@@ -195,9 +380,12 @@ class IAdrive:
         
         return metadata
     
-    def upload_to_ia(self, file_map, drive_id, metadata):
+    def upload_to_ia(self, file_map, drive_id, metadata, is_google_docs=False):
         """Upload files to Internet Archive with optional folder structure preservation"""
-        identifier = f"drive-{drive_id}"
+        if is_google_docs:
+            identifier = f"docs-{drive_id}"
+        else:
+            identifier = f"drive-{drive_id}"
         identifier = sanitize_identifier(identifier)
         
         if self.verbose:
@@ -264,13 +452,19 @@ class IAdrive:
         
         return identifier, metadata
     
-    def archive_drive_url(self, url, custom_meta=None):
-        """Main method to download from Google Drive and upload to IA"""
+    def archive_drive_url(self, url, custom_meta=None, formats=None):
+        """Main method to download from Google Drive/Docs and upload to IA"""
         # Check dependencies first
         self.check_dependencies()
         
-        # Download content
-        download_path, drive_id = self.download_drive_content(url)
+        is_google_docs = self.is_google_docs_url(url)
+        doc_type = self.get_google_docs_type(url) if is_google_docs else None
+        
+        # For Google Docs, we always export all formats
+        if is_google_docs:
+            download_path, drive_id, downloaded_files = self.download_drive_content(url)
+        else:
+            download_path, drive_id, _ = self.download_drive_content(url)
         
         # Get file list with structure preserved
         file_map = self.get_file_list_with_structure(download_path)
@@ -279,18 +473,25 @@ class IAdrive:
         
         if self.verbose:
             print(f"Found {len(file_map)} files to upload")
-            if self.preserve_folders:
-                print("File structure:")
+            if is_google_docs:
+                print(f"Google {doc_type.title()} exported in ALL available formats:")
                 for rel_path in sorted(file_map.keys()):
-                    print(f"  - {rel_path}")
+                    ext = os.path.splitext(rel_path)[1].lstrip('.')
+                    format_desc = self.docs_formats.get(doc_type, {}).get(ext, ext.upper())
+                    print(f"  - {rel_path} ({format_desc})")
             else:
-                print("Files will be uploaded with flat structure")
+                if self.preserve_folders:
+                    print("File structure:")
+                    for rel_path in sorted(file_map.keys()):
+                        print(f"  - {rel_path}")
+                else:
+                    print("Files will be uploaded with flat structure")
         
         # Create metadata
-        metadata = self.create_metadata(file_map, drive_id, url, custom_meta)
+        metadata = self.create_metadata(file_map, drive_id, url, custom_meta, is_google_docs, doc_type)
         
         # Upload to Internet Archive with or without folder structure
-        identifier, final_metadata = self.upload_to_ia(file_map, drive_id, metadata)
+        identifier, final_metadata = self.upload_to_ia(file_map, drive_id, metadata, is_google_docs)
         
         # Clean up downloaded files
         import shutil

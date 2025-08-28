@@ -10,14 +10,15 @@
 [![License Button]][License Link]
 [![PyPI Button]][PyPI Link]
 
-IAdrive is A tool for archiving google drive files/folders and uploading them to the [Internet Archive](https://archive.org/), it downloads
-the google drive's content, makes the metadata, and then uploads to IA
+IAdrive is a tool for archiving Google Drive files/folders and Google Docs/Sheets/Slides and uploading them to the [Internet Archive](https://archive.org/), It downloads the content, creates appropriate metadata, and uploads to IA with preservation of folder structure
 
-- this project is heavily based of off [tubeup](https://github.com/bibanon/tubeup) by bibanon, credits to them
+- This project is heavily based off [tubeup](https://github.com/bibanon/tubeup) by bibanon, credits to them
 
 ## Features
 
-- Downloads files and/or folders from Google Drive using [gdown](https://github.com/wkentaro/gdown)
+- **Google Drive Support**: Downloads files and/or folders from Google Drive using [gdown](https://github.com/wkentaro/gdown)
+- **Google Docs Integration**: Directly exports Google Docs, Sheets, and Slides in multiple formats
+- **Multiple Format Export**: For Google Docs, automatically exports in all available formats (PDF, DOCX, TXT, HTML, etc)
 - Preserves folder structure when uploading (can be disabled with `--disable-slash-files`)
 - Extract file modification dates to determine the creation date for the item
 - Pass custom metadata to Archive.org using `--metadata=<key:value>`
@@ -58,16 +59,76 @@ iadrive <url> [--metadata=<key:value>...] [--disable-slash-files] [--quiet] [--d
 
 Arguments:
 
-- `<url>` – Google Drive file or folder URL to mirror (required)
+- `<url>` – Google Drive file/folder URL or Google Docs/Sheets/Slides URL to archive
 
 Options:
 
-- `--metadata=<key:value>` – custom metadata to add to the Archive.org item (can be used multiple times)
+- `--metadata=<key:value>` – custom metadata to add to the IA item
 - `--disable-slash-files` – upload files without preserving folder structure
 - `--quiet` – only print errors
-- `--debug` – print all logs to stdout (for troubleshooting)
+- `--debug` – print all logs to stdout
 
-Examples:
+## Google Docs Support
+
+IAdrive can directly archive Google Docs, Sheets, and Slides by exporting them in all available formats, it uses public export URLs
+
+### Available Formats
+
+Google Documents:
+- `pdf`
+- `docx`
+- `odt`
+- `rtf`
+- `txt`
+- `html`
+- `epub`
+
+**Google Spreadsheets:**
+- `xlsx`
+- `ods`
+- `pdf`
+- `csv`
+- `tsv`
+- `html`
+
+**Google Presentations:**
+- `pdf`
+- `pptx`
+- `odp`
+- `txt`
+- `jpeg`
+- `png`
+- `svg`
+
+### Automatic Export Behavior
+
+For example, a Google Document will be automatically exported and uploaded as:
+- `placeholder.pdf`
+- `placeholder.docx`
+- `placeholder.odt`
+- `placeholder.rtf`
+- `placeholder.txt`
+- `placeholder.html`
+- `placeholder.epub`
+
+### Google Docs Examples
+
+```bash
+
+# Archive Google Document
+iadrive https://docs.google.com/document/d/1abc123/edit
+
+# Archive Google Spreadsheet
+iadrive https://docs.google.com/spreadsheets/d/1abc123/edit
+
+# Archive Google Slides with custom metadata
+iadrive https://docs.google.com/presentation/d/1abc123/edit --metadata=collection:placeholder --metadata=creator:placeholder
+
+# Debug mode with Google Docs
+iadrive https://docs.google.com/document/d/1abc123/edit --debug
+```
+
+## Google Drive Examples
 
 ```bash
 # Upload with folder structure preserved (default)
@@ -101,21 +162,34 @@ The files will be uploaded to Internet Archive as:
 - `folder/folder/placeholder.mp4`
 
 If you use the `--disable-slash-files` command argument, all files will be uploaded to the root level:
-- `file1.txt`
-- `file2.txt`
-- `document.pdf`
-- `data.csv`
+- `placeholder.txt`
+- `placeholder.mp3`
+- `placeholder.pdf`
+- `placeholder.mp4`
 
 Note: When using flat structure, duplicate filenames are automatically handled by adding a number (e.g., `placeholder.pdf`, `placeholder_1.pdf`).
 
 ## How it works
 
+### Google Drive Files/Folders
 1. `iadrive` uses `gdown` to fetch the specified Google Drive file or folder
 2. It walks the downloaded directory and extracts file extensions and modification dates
-3. Metadata is assembled including a file listing (with sizes), oldest file modification date, and original URL. Identifiers are sanitized and subject tags are truncated to fit Archive.org requirements. Publisher defaults to "IAdrive" since collaborator fetching is not yet implemented.
-4. The directory is uploaded to an Archive.org item using the `internetarchive` library with a fixed identifier format `drive-{drive-id}`, collection `opensource`, and mediatype `data`, Folder structure is preserved by default (can be disabled with `--disable-slash-files`)
-5. Downloaded files are automatically cleaned up after upload
-6. Errors are handled gracefully, and debug output is available with `--debug`
+3. Metadata is made including a file listing (with sizes), oldest file modification date, and original URL
+4. The content is uploaded to Archive.org with identifier format `drive-{drive-id}`
+
+### Google Docs/Sheets/Slides
+1. `iadrive` detects Google Docs URLs and determines the document type
+2. It automatically exports the document in **all available formats** using Google's public export URLs
+3. Each format is downloaded and saved with descriptive filenames
+4. Metadata includes comprehensive format information and document type
+5. The content is uploaded to Archive.org with identifier format `docs-{doc-id}`
+
+### Common Steps
+- Identifiers are sanitized and subject tags are truncated to fit Archive.org requirements
+- Publisher defaults to "IAdrive" since collaborator fetching is not yet implemented
+- Folder structure is preserved by default (can be disabled with `--disable-slash-files`)
+- Downloaded files are automatically cleaned up after upload
+- Errors are handled gracefully, and debug output is available with `--debug`
 
 ## Supported Platforms
 
@@ -124,3 +198,4 @@ For a list of supported platforms for archiving, please see [`SUPPORTEDPLATFORMS
 ## To-do list
 
 - Google Drive collaborator fetching to use as creator metadata through the Google API
+- Batch processing

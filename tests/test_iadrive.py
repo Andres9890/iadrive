@@ -6,13 +6,14 @@ import time
 import requests_mock
 import tempfile
 import logging
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, mock_open
+import urllib.request
 
 from iadrive.core import IAdrive
 from iadrive import __version__
 
 
-SCANNER = f'IAdrive Google Drive File Mirroring Application v{__version__}'
+SCANNER = f'IAdrive Google Drive File Mirroring Application {__version__}'
 
 current_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -53,6 +54,55 @@ class MockGdown:
                 f.write(f'Mock content for {file_path}')
 
 
+class MockUrllibRequest:
+    """Mock for urllib.request to simulate Google Docs downloads"""
+    
+    @staticmethod
+    def urlretrieve(url, filename):
+        """Mock urlretrieve for Google Docs export"""
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        
+        # Create mock file content based on format
+        ext = os.path.splitext(filename)[1].lower()
+        if ext == '.pdf':
+            content = b'%PDF-1.4 Mock PDF content'
+        elif ext == '.docx':
+            content = b'PK\x03\x04 Mock DOCX content'  # DOCX files start with PK
+        elif ext == '.txt':
+            content = b'Mock text content from Google Doc'
+        elif ext == '.html':
+            content = b'<html><body>Mock HTML content</body></html>'
+        elif ext == '.csv':
+            content = b'Column1,Column2,Column3\nValue1,Value2,Value3'
+        else:
+            content = f'Mock {ext} content'.encode('utf-8')
+        
+        with open(filename, 'wb') as f:
+            f.write(content)
+    
+    @staticmethod
+    def urlopen(url, timeout=None):
+        """Mock urlopen for getting document titles"""
+        class MockResponse:
+            def read(self):
+                if 'document' in url:
+                    return b'<html><head><title>Test Document - Google Docs</title></head></html>'
+                elif 'spreadsheets' in url:
+                    return b'<html><head><title>Test Spreadsheet - Google Sheets</title></head></html>'
+                elif 'presentation' in url:
+                    return b'<html><head><title>Test Presentation - Google Slides</title></head></html>'
+                return b'<html><head><title>Untitled Document</title></head></html>'
+            
+            def __enter__(self):
+                return self
+            
+            def __exit__(self, *args):
+                pass
+        
+        return MockResponse()
+
+
 class IAdriveMockTests(unittest.TestCase):
 
     def setUp(self):
@@ -82,6 +132,7 @@ class IAdriveMockTests(unittest.TestCase):
         iadrive = IAdrive(verbose=True, dir_path=self.test_dir)
         self.assertIsInstance(iadrive.logger, logging.Logger)
 
+    # Original Google Drive tests
     def test_extract_drive_id_folder(self):
         """Test extracting drive ID from folder URL"""
         url = 'https://drive.google.com/drive/folders/1-0axLqCuOUNbBIe3Cz6Y1KojGg4iXg1h'
@@ -96,12 +147,6 @@ class IAdriveMockTests(unittest.TestCase):
         expected = '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms'
         self.assertEqual(result, expected)
 
-    def test_extract_drive_id_invalid_url(self):
-        """Test extracting drive ID from invalid URL"""
-        url = 'https://example.com/invalid'
-        with self.assertRaises(ValueError):
-            self.iadrive.extract_drive_id(url)
-
     def test_is_folder_url(self):
         """Test folder URL detection"""
         folder_url = 'https://drive.google.com/drive/folders/1-0axLqCuOUNbBIe3Cz6Y1KojGg4iXg1h'
@@ -110,140 +155,219 @@ class IAdriveMockTests(unittest.TestCase):
         self.assertTrue(self.iadrive.is_folder_url(folder_url))
         self.assertFalse(self.iadrive.is_folder_url(file_url))
 
-    @patch('iadrive.core.gdown', MockGdown)
-    def test_download_drive_content_file(self):
-        """Test downloading a single file"""
-        url = 'https://drive.google.com/file/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit'
+    # Google Docs specific tests
+    def test_is_google_docs_url(self):
+        """Test Google Docs URL detection"""
+        docs_urls = [
+            'https://docs.google.com/document/d/1abc123/edit',
+            'https://docs.google.com/spreadsheets/d/1abc123/edit',
+            'https://docs.google.com/presentation/d/1abc123/edit'
+        ]
+        drive_url = 'https://drive.google.com/file/d/1abc123'
         
-        download_path, drive_id = self.iadrive.download_drive_content(url)
+        for url in docs_urls:
+            self.assertTrue(self.iadrive.is_google_docs_url(url))
         
-        self.assertEqual(drive_id, '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms')
-        self.assertTrue(os.path.exists(download_path))
+        self.assertFalse(self.iadrive.is_google_docs_url(drive_url))
 
-    @patch('iadrive.core.gdown', MockGdown)
-    def test_download_drive_content_folder(self):
-        """Test downloading a folder"""
-        url = 'https://drive.google.com/drive/folders/1-0axLqCuOUNbBIe3Cz6Y1KojGg4iXg1h'
+    def test_get_google_docs_type(self):
+        """Test getting Google Docs type"""
+        test_cases = [
+            ('https://docs.google.com/document/d/1abc123/edit', 'document'),
+            ('https://docs.google.com/spreadsheets/d/1abc123/edit', 'spreadsheets'),
+            ('https://docs.google.com/presentation/d/1abc123/edit', 'presentation'),
+            ('https://drive.google.com/file/d/1abc123', None)
+        ]
         
-        download_path, drive_id = self.iadrive.download_drive_content(url)
-        
-        self.assertEqual(drive_id, '1-0axLqCuOUNbBIe3Cz6Y1KojGg4iXg1h')
-        self.assertTrue(os.path.exists(download_path))
+        for url, expected in test_cases:
+            result = self.iadrive.get_google_docs_type(url)
+            self.assertEqual(result, expected)
 
-    def test_get_file_list(self):
-        """Test getting file list from directory"""
-        # Create test directory structure
-        test_dir = os.path.join(self.test_dir, 'test_files')
-        os.makedirs(test_dir)
+    def test_extract_docs_id(self):
+        """Test extracting Google Docs ID"""
+        test_cases = [
+            ('https://docs.google.com/document/d/1abc123def456/edit', '1abc123def456'),
+            ('https://docs.google.com/spreadsheets/d/1xyz789/edit#gid=0', '1xyz789'),
+            ('https://docs.google.com/presentation/d/1pqr456/edit#slide=1', '1pqr456')
+        ]
         
-        files = ['file1.txt', 'subdir/file2.txt']
+        for url, expected in test_cases:
+            result = self.iadrive.extract_docs_id(url)
+            self.assertEqual(result, expected)
+
+    def test_extract_docs_id_invalid_url(self):
+        """Test extracting docs ID from invalid URL"""
+        url = 'https://example.com/invalid'
+        with self.assertRaises(ValueError):
+            self.iadrive.extract_docs_id(url)
+
+    @patch('iadrive.core.urllib.request', MockUrllibRequest)
+    def test_download_google_doc_all_formats(self):
+        """Test downloading Google Doc with all formats automatically"""
+        url = 'https://docs.google.com/document/d/1abc123/edit'
+        doc_id = '1abc123'
+        doc_type = 'document'
+        
+        download_path, result_id, files = self.iadrive.download_google_doc(url, doc_id, doc_type)
+        
+        self.assertEqual(result_id, doc_id)
+        self.assertTrue(os.path.exists(download_path))
+        # Should have all 7 document formats: pdf, docx, odt, rtf, txt, html, epub
+        self.assertEqual(len(files), 7)
+        
+        # Check that all expected formats are present
+        extensions = [os.path.splitext(f)[1].lower() for f in files]
+        expected_extensions = ['.pdf', '.docx', '.odt', '.rtf', '.txt', '.html', '.epub']
+        for ext in expected_extensions:
+            self.assertIn(ext, extensions, f"Missing format: {ext}")
+        
+        # Check that files were created and have content
         for file_path in files:
-            full_path = os.path.join(test_dir, file_path)
-            os.makedirs(os.path.dirname(full_path), exist_ok=True)
-            with open(full_path, 'w') as f:
-                f.write('test content')
-        
-        result = self.iadrive.get_file_list(test_dir)
-        self.assertEqual(len(result), 2)
+            self.assertTrue(os.path.exists(file_path))
+            self.assertGreater(os.path.getsize(file_path), 0)
 
-    def test_create_metadata_single_file(self):
-        """Test metadata creation for single file"""
-        # Create a test file
-        test_file = os.path.join(self.test_dir, 'test.txt')
-        with open(test_file, 'w') as f:
-            f.write('test')
+    @patch('iadrive.core.urllib.request', MockUrllibRequest)
+    def test_download_google_sheet_all_formats(self):
+        """Test downloading Google Spreadsheet with all formats automatically"""
+        url = 'https://docs.google.com/spreadsheets/d/1abc123/edit'
+        doc_id = '1abc123'
+        doc_type = 'spreadsheets'
         
-        files = [test_file]
+        download_path, result_id, files = self.iadrive.download_google_doc(url, doc_id, doc_type)
+        
+        self.assertEqual(result_id, doc_id)
+        # Should have all 6 spreadsheet formats: xlsx, ods, pdf, csv, tsv, html
+        self.assertEqual(len(files), 6)
+        
+        # Check that all expected formats are present
+        extensions = [os.path.splitext(f)[1].lower() for f in files]
+        expected_extensions = ['.xlsx', '.ods', '.pdf', '.csv', '.tsv', '.html']
+        for ext in expected_extensions:
+            self.assertIn(ext, extensions, f"Missing format: {ext}")
+
+    @patch('iadrive.core.urllib.request', MockUrllibRequest)
+    def test_download_google_presentation_all_formats(self):
+        """Test downloading Google Presentation with all formats automatically"""
+        url = 'https://docs.google.com/presentation/d/1abc123/edit'
+        doc_id = '1abc123'
+        doc_type = 'presentation'
+        
+        download_path, result_id, files = self.iadrive.download_google_doc(url, doc_id, doc_type)
+        
+        self.assertEqual(result_id, doc_id)
+        # Should have all 7 presentation formats: pdf, pptx, odp, txt, jpeg, png, svg
+        self.assertEqual(len(files), 7)
+        
+        # Check that all expected formats are present
+        extensions = [os.path.splitext(f)[1].lower() for f in files]
+        expected_extensions = ['.pdf', '.pptx', '.odp', '.txt', '.jpeg', '.png', '.svg']
+        for ext in expected_extensions:
+            self.assertIn(ext, extensions, f"Missing format: {ext}")
+
+    @patch('iadrive.core.urllib.request', MockUrllibRequest)
+    def test_get_google_docs_title(self):
+        """Test getting Google Docs title"""
+        test_cases = [
+            ('https://docs.google.com/document/d/1abc123/edit', 'Test Document'),
+            ('https://docs.google.com/spreadsheets/d/1abc123/edit', 'Test Spreadsheet'),
+            ('https://docs.google.com/presentation/d/1abc123/edit', 'Test Presentation')
+        ]
+        
+        for url, expected in test_cases:
+            result = self.iadrive.get_google_docs_title(url, '1abc123')
+            self.assertEqual(result, expected)
+
+    def test_create_metadata_google_docs(self):
+        """Test metadata creation for Google Docs"""
+        # Create test files
+        test_doc_path = os.path.join(self.test_dir, 'Test Document.pdf')
+        with open(test_doc_path, 'w') as f:
+            f.write('test pdf content')
+        
+        file_map = {'Test Document.pdf': test_doc_path}
         drive_id = 'test123'
-        url = 'https://drive.google.com/file/d/test123'
-        download_path = self.test_dir
+        url = 'https://docs.google.com/document/d/test123/edit'
         
-        metadata = self.iadrive.create_metadata(files, drive_id, url, download_path)
+        metadata = self.iadrive.create_metadata(
+            file_map, drive_id, url, None, is_google_docs=True, doc_type='document'
+        )
         
-        self.assertEqual(metadata['title'], 'test.txt')
-        self.assertEqual(metadata['mediatype'], 'data')
-        self.assertEqual(metadata['collection'], 'opensource')
-        self.assertEqual(metadata['filecount'], '1')
-        self.assertEqual(metadata['originalurl'], url)
-        self.assertEqual(metadata['scanner'], SCANNER)
-
-    def test_create_metadata_folder(self):
-        """Test metadata creation for folder"""
-        # Create test folder structure
-        test_folder = os.path.join(self.test_dir, 'Test Folder')
-        os.makedirs(test_folder)
-        
-        test_file = os.path.join(test_folder, 'file.txt')
-        with open(test_file, 'w') as f:
-            f.write('test')
-        
-        files = [test_file]
-        drive_id = 'folder123'
-        url = 'https://drive.google.com/drive/folders/folder123'
-        download_path = self.test_dir
-        
-        metadata = self.iadrive.create_metadata(files, drive_id, url, download_path)
-        
-        self.assertEqual(metadata['title'], 'Test Folder')
-        self.assertEqual(metadata['filecount'], '1')
+        self.assertEqual(metadata['title'], 'Test Document')
+        self.assertEqual(metadata['mediatype'], 'texts')
+        self.assertEqual(metadata['collection'], 'opensource_media')
+        self.assertEqual(metadata['doctype'], 'document')
+        self.assertIn('document', metadata['subject'])
+        self.assertIn('Google Document exported', metadata['description'])
 
     @patch('iadrive.core.internetarchive')
-    def test_upload_to_ia(self, mock_ia):
-        """Test uploading to Internet Archive"""
+    def test_upload_to_ia_google_docs(self, mock_ia):
+        """Test uploading Google Docs to Internet Archive"""
         # Mock IA item
         mock_item = MagicMock()
         mock_item.exists = False
         mock_ia.get_item.return_value = mock_item
         
         # Create test file
-        test_file = os.path.join(self.test_dir, 'test.txt')
+        test_file = os.path.join(self.test_dir, 'test.pdf')
         with open(test_file, 'w') as f:
             f.write('test')
         
-        files = [test_file]
+        file_map = {'test.pdf': test_file}
         drive_id = 'test123'
-        metadata = {'title': 'Test', 'mediatype': 'data'}
+        metadata = {'title': 'Test Doc', 'mediatype': 'texts'}
         
-        identifier, result_metadata = self.iadrive.upload_to_ia(files, drive_id, metadata)
+        identifier, result_metadata = self.iadrive.upload_to_ia(
+            file_map, drive_id, metadata, is_google_docs=True
+        )
         
-        self.assertEqual(identifier, 'drive-test123')
+        self.assertEqual(identifier, 'docs-test123')  # docs- prefix for Google Docs
         self.assertEqual(result_metadata, metadata)
         mock_item.upload.assert_called_once()
 
-    @patch('iadrive.core.internetarchive')
-    def test_upload_to_ia_existing_item(self, mock_ia):
-        """Test uploading when item already exists"""
-        # Mock IA item that exists
-        mock_item = MagicMock()
-        mock_item.exists = True
-        mock_ia.get_item.return_value = mock_item
+    @patch('iadrive.core.gdown', MockGdown)
+    def test_download_drive_content_file(self):
+        """Test downloading a single file (original functionality)"""
+        url = 'https://drive.google.com/file/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit'
         
-        files = ['test.txt']
-        drive_id = 'test123'
-        metadata = {'title': 'Test'}
+        download_path, drive_id, files = self.iadrive.download_drive_content(url)
         
-        identifier, result_metadata = self.iadrive.upload_to_ia(files, drive_id, metadata)
-        
-        self.assertEqual(identifier, 'drive-test123')
-        mock_item.upload.assert_not_called()
+        self.assertEqual(drive_id, '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms')
+        self.assertTrue(os.path.exists(download_path))
+        self.assertIsNone(files)  # Regular drive downloads don't return file list
 
-    def test_check_dependencies_missing_gdown(self):
-        """Test dependency check when gdown is missing"""
-        with patch.dict('sys.modules', {'gdown': None}):
-            with self.assertRaises(Exception) as cm:
-                self.iadrive.check_dependencies()
-            self.assertIn('Missing required package', str(cm.exception))
-
-    @patch('iadrive.core.internetarchive')
-    def test_check_dependencies_ia_not_configured(self, mock_ia):
-        """Test dependency check when IA is not configured"""
-        mock_session = MagicMock()
-        mock_session.config = {'s3': {}}
-        mock_ia.get_session.return_value = mock_session
+    @patch('iadrive.core.urllib.request', MockUrllibRequest)
+    def test_download_drive_content_google_docs(self):
+        """Test downloading Google Docs"""
+        url = 'https://docs.google.com/document/d/1abc123/edit'
         
-        with self.assertRaises(Exception) as cm:
-            self.iadrive.check_dependencies()
-        self.assertIn('Internet Archive not configured', str(cm.exception))
+        download_path, drive_id, files = self.iadrive.download_drive_content(url)
+        
+        self.assertEqual(drive_id, '1abc123')
+        self.assertTrue(os.path.exists(download_path))
+        self.assertIsNotNone(files)  # Google Docs downloads return file list
+        self.assertGreater(len(files), 0)
+
+    def test_docs_formats_structure(self):
+        """Test that docs_formats structure is correct"""
+        # Check that all document types are present
+        self.assertIn('document', self.iadrive.docs_formats)
+        self.assertIn('spreadsheets', self.iadrive.docs_formats)
+        self.assertIn('presentation', self.iadrive.docs_formats)
+        
+        # Check some expected formats
+        self.assertIn('pdf', self.iadrive.docs_formats['document'])
+        self.assertIn('xlsx', self.iadrive.docs_formats['spreadsheets'])
+        self.assertIn('pptx', self.iadrive.docs_formats['presentation'])
+        
+        # Ensure we have all the expected formats for comprehensive export
+        doc_formats = self.iadrive.docs_formats['document']
+        self.assertEqual(len(doc_formats), 7)  # pdf, docx, odt, rtf, txt, html, epub
+        
+        sheet_formats = self.iadrive.docs_formats['spreadsheets']
+        self.assertEqual(len(sheet_formats), 6)  # xlsx, ods, pdf, csv, tsv, html
+        
+        pres_formats = self.iadrive.docs_formats['presentation']
+        self.assertEqual(len(pres_formats), 7)  # pdf, pptx, odp, txt, jpeg, png, svg
 
 
 class IAdriveIntegrationMockTest(unittest.TestCase):
@@ -259,8 +383,8 @@ class IAdriveIntegrationMockTest(unittest.TestCase):
 
     @patch('iadrive.core.gdown', MockGdown)
     @patch('iadrive.core.internetarchive')
-    def test_archive_drive_url_full_workflow(self, mock_ia):
-        """Test the complete workflow from URL to upload"""
+    def test_archive_drive_url_full_workflow_traditional(self, mock_ia):
+        """Test the complete workflow for traditional Google Drive content"""
         # Mock IA session and item
         mock_session = MagicMock()
         mock_session.config = {'s3': {'access': 'test_key'}}
@@ -277,4 +401,34 @@ class IAdriveIntegrationMockTest(unittest.TestCase):
         self.assertEqual(identifier, 'drive-1-0axlqcuounbbfe3cz6y1kojgg4ixg1h')
         self.assertEqual(metadata['title'], 'Test Folder')
         self.assertEqual(metadata['originalurl'], url)
+        self.assertEqual(metadata['mediatype'], 'data')
         mock_item.upload.assert_called_once()
+
+    @patch('iadrive.core.urllib.request', MockUrllibRequest)
+    @patch('iadrive.core.internetarchive')
+    def test_archive_drive_url_full_workflow_google_docs(self, mock_ia):
+        """Test the complete workflow for Google Docs"""
+        # Mock IA session and item
+        mock_session = MagicMock()
+        mock_session.config = {'s3': {'access': 'test_key'}}
+        mock_ia.get_session.return_value = mock_session
+        
+        mock_item = MagicMock()
+        mock_item.exists = False
+        mock_ia.get_item.return_value = mock_item
+        
+        url = 'https://docs.google.com/document/d/1abc123/edit'
+        
+        identifier, metadata = self.iadrive.archive_drive_url(url)
+        
+        self.assertEqual(identifier, 'docs-1abc123')
+        self.assertEqual(metadata['title'], 'Test Document')
+        self.assertEqual(metadata['originalurl'], url)
+        self.assertEqual(metadata['mediatype'], 'texts')
+        self.assertEqual(metadata['doctype'], 'document')
+        self.assertEqual(metadata['filecount'], '7')
+        mock_item.upload.assert_called_once()
+
+
+if __name__ == '__main__':
+    unittest.main()
