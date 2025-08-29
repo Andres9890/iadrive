@@ -322,13 +322,8 @@ class IAdrive:
             else:
                 size_str = f"{file_size} bytes"
             
-            if is_google_docs:
-                # For Google Docs, show format information
-                ext = os.path.splitext(rel_path)[1].lstrip('.')
-                format_desc = self.docs_formats.get(doc_type, {}).get(ext, ext.upper())
-                description_lines.append(f"- {rel_path} ({format_desc}, {size_str})")
-            else:
-                description_lines.append(f"- {rel_path} ({size_str})")
+            # Show only size for all files (both Google Docs and regular Drive files)
+            description_lines.append(f"- {rel_path} ({size_str})")
                 
         description = "<br>".join(description_lines)
         

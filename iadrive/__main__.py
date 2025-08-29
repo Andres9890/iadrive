@@ -17,7 +17,7 @@ Options:
   -q --quiet                   Just print errors
   -d --debug                   Print all logs to stdout
 
-Note: Google Docs are automatically exported in all available formats for preservation:
+Note: Google Docs are automatically exported in all available formats:
   Documents: PDF, DOCX, ODT, RTF, TXT, HTML, EPUB
   Spreadsheets: XLSX, ODS, PDF, CSV, TSV, HTML
   Presentations: PDF, PPTX, ODP, TXT, JPEG, PNG, SVG
@@ -35,7 +35,7 @@ from iadrive import __version__
 
 def print_supported_formats():
     """Print supported formats for Google Docs"""
-    print("\nGoogle Docs formats (ALL are automatically exported):")
+    print("\nGoogle Docs formats:")
     print("  Documents: PDF, DOCX, ODT, RTF, TXT, HTML, EPUB")
     print("  Spreadsheets: XLSX, ODS, PDF, CSV, TSV, HTML") 
     print("  Presentations: PDF, PPTX, ODP, TXT, JPEG, PNG, SVG")
@@ -67,7 +67,7 @@ def main():
     
     if is_docs_url and not quiet_mode:
         print("Detected Google Docs URL.")
-        print("All available formats will be automatically exported for comprehensive preservation.")
+        print("All available formats will be exported")
         print_supported_formats()
         print()
     
@@ -78,21 +78,6 @@ def main():
         print('\n:: Upload Finished. Item information:')
         print('Title: %s' % meta['title'])
         print('Item URL: https://archive.org/details/%s\n' % identifier)
-        
-        # Show what was uploaded for Google Docs
-        if is_docs_url and not quiet_mode:
-            doc_type = None
-            if 'docs.google.com/document' in url:
-                doc_type = 'document'
-            elif 'docs.google.com/spreadsheets' in url:
-                doc_type = 'spreadsheets'  
-            elif 'docs.google.com/presentation' in url:
-                doc_type = 'presentation'
-                
-            if doc_type:
-                format_count = len([ext for ext in ['pdf', 'docx', 'odt', 'rtf', 'txt', 'html', 'epub', 'xlsx', 'ods', 'csv', 'tsv', 'pptx', 'odp', 'jpeg', 'png', 'svg']])
-                print(f"Google {doc_type.title()} was exported and uploaded in ALL available formats.")
-                print("Check the Internet Archive item for complete format preservation.\n")
         
     except Exception as e:
         error_msg = str(e)
