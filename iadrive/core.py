@@ -370,7 +370,7 @@ class IAdrive:
             'subject': subject,
             'filecount': str(len(files)),
             'originalurl': original_url,
-            'scanner': f'IAdrive Google Drive File Mirroring Application {__version__}',
+            'scanner': f'IAdrive File Mirroring Application {__version__}',
             **({'foldercount': str(len(folder_paths))} if folder_paths else {}),
             **({'doctype': doc_type} if is_google_docs else {})
         }

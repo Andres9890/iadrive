@@ -70,10 +70,10 @@ class UtilsTest(unittest.TestCase):
         clean = [sanitize_identifier(x) for x in bad]
         self.assertEqual(expected, clean)
 
-    def test_sanitize_identifier_uppercase(self):
-        """Test converting uppercase to lowercase"""
-        result = sanitize_identifier('DRIVE-TEST123')
-        expected = 'drive-test123'
+    def test_sanitize_identifier_case_preservation(self):
+        """Test preserving original case"""
+        result = sanitize_identifier('DRIVE-Test123')
+        expected = 'DRIVE-Test123'  # Should preserve original case
         self.assertEqual(result, expected)
 
     def test_sanitize_identifier_consecutive_hyphens(self):

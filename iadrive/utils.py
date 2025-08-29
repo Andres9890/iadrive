@@ -29,8 +29,8 @@ def key_value_to_dict(lst):
 
 def sanitize_identifier(identifier, replacement='-'):
     """Sanitize identifier for Internet Archive"""
-    # IA identifiers must be lowercase alphanumeric with hyphens/underscores
-    identifier = identifier.lower()
+    # IA identifiers must be alphanumeric with hyphens/underscores
+    # Remove the lowercase conversion to preserve original case from Drive/Docs IDs
     identifier = re.sub(r'[^\w-]', replacement, identifier)
     # Remove consecutive hyphens
     identifier = re.sub(r'-+', '-', identifier)

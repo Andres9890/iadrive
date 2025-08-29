@@ -13,7 +13,7 @@ from iadrive.core import IAdrive
 from iadrive import __version__
 
 
-SCANNER = f'IAdrive Google Drive File Mirroring Application {__version__}'
+SCANNER = f'IAdrive File Mirroring Application {__version__}'
 
 current_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -398,7 +398,8 @@ class IAdriveIntegrationMockTest(unittest.TestCase):
         
         identifier, metadata = self.iadrive.archive_drive_url(url)
         
-        self.assertEqual(identifier, 'drive-1-0axlqcuounbbfe3cz6y1kojgg4ixg1h')
+        # Updated expectation, preserve original case in drive ID
+        self.assertEqual(identifier, 'drive-1-0axLqCuOUNbBIe3Cz6Y1KojGg4iXg1h')
         self.assertEqual(metadata['title'], 'Test Folder')
         self.assertEqual(metadata['originalurl'], url)
         self.assertEqual(metadata['mediatype'], 'data')
