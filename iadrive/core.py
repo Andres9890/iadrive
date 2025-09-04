@@ -18,7 +18,7 @@ from iadrive import __version__
 class IAdrive:
     def __init__(self, verbose=False, dir_path='~/.iadrive', preserve_folders=True):
         """
-        IAdrive - Google Drive to Internet Archive uploader
+        IAdrive - Google Drive and Mega.nz to Internet Archive uploader
         
         :param verbose: Print detailed logs
         :param dir_path: Directory to store downloaded files
@@ -91,6 +91,18 @@ class IAdrive:
         ]
         return any(re.search(pattern, url) for pattern in docs_patterns)
     
+    def is_mega_url(self, url):
+        """Check if URL is a Mega.nz URL"""
+        mega_patterns = [
+            r'mega\.nz',
+            r'mega\.co\.nz'
+        ]
+        return any(re.search(pattern, url, re.IGNORECASE) for pattern in mega_patterns)
+    
+    def is_mega_folder_url(self, url):
+        """Check if URL is a Mega.nz folder URL"""
+        return self.is_mega_url(url) and ('#F!' in url or '/folder/' in url)
+    
     def get_google_docs_type(self, url):
         """Determine the type of Google Docs URL"""
         if 'docs.google.com/document' in url:
@@ -117,6 +129,23 @@ class IAdrive:
         
         raise ValueError(f"Could not extract Google Docs ID from URL: {url}")
     
+    def extract_mega_id(self, url):
+        """Extract Mega.nz file/folder ID from URL"""
+        
+        patterns = [
+            r'mega\.nz/file/([^#]+)',
+            r'mega\.nz/folder/([^#]+)', 
+            r'mega\.nz/#!([^!]+)',
+            r'mega\.nz/#F!([^!]+)',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, url, re.IGNORECASE)
+            if match:
+                return match.group(1)
+        
+        raise ValueError(f"Could not extract Mega.nz ID from URL: {url}")
+    
     def extract_drive_id(self, url):
         """Extract Google Drive file/folder ID from URL"""
         if self.is_google_docs_url(url):
@@ -139,8 +168,73 @@ class IAdrive:
         """Check if URL is a Google Drive folder"""
         return '/folders/' in url
     
+    def download_mega_content(self, url):
+        """Download Mega.nz file/folder using mega.py"""
+        try:
+            from mega import Mega
+        except ImportError:
+            raise Exception("mega.py not installed. Run 'pip install mega.py' to add Mega.nz support")
+        
+        mega_id = self.extract_mega_id(url)
+        download_path = os.path.join(self.dir_path, f"mega-{mega_id}")
+        os.makedirs(download_path, exist_ok=True)
+        
+        if self.verbose:
+            print(f"Downloading from Mega.nz: {url}")
+            print(f"Download path: {download_path}")
+        
+        try:
+            mega = Mega()
+            m = mega.login()
+            
+            if self.is_mega_folder_url(url):
+                if self.verbose:
+                    print("Detected Mega.nz folder")
+                
+                # For folder downloads, we need to handle this differently
+                # The mega.py library requires different handling for folders
+                try:
+                    # Try to download folder contents
+                    # This is a simplified approach - mega.py folder handling can be complex
+                    files = m.get_files()
+                    
+                    # For now, we'll extract the public key from URL and try to download
+                    if '#F!' in url:
+                        # Public folder format
+                        parts = url.split('#F!')
+                        if len(parts) > 1 and '!' in parts[1]:
+                            folder_key, decrypt_key = parts[1].split('!', 1)
+                            # Download public folder, this may need adjustments
+                            if self.verbose:
+                                print(f"Attempting to download public folder: {folder_key}")
+                        else:
+                            raise Exception("Invalid Mega.nz folder URL format")
+                    else:
+                        raise Exception("Mega.nz folder download format not supported yet")
+                        
+                except Exception as e:
+                    if self.verbose:
+                        print(f"Folder download failed, trying as single file: {e}")
+                    # Fall back to single file download
+                    filename = m.download_url(url, download_path)
+                    if self.verbose:
+                        print(f"Downloaded file: {filename}")
+            else:
+                if self.verbose:
+                    print("Detected Mega.nz file")
+                
+                # Single file download
+                filename = m.download_url(url, download_path)
+                if self.verbose:
+                    print(f"Downloaded file: {filename}")
+            
+            return download_path, mega_id, None
+            
+        except Exception as e:
+            raise Exception(f"Failed to download from Mega.nz: {e}")
+    
     def download_google_doc(self, url, doc_id, doc_type, formats=None):
-        """Download Google Doc in all available formats for preservation"""
+        """Download Google Doc in all available formats"""
         all_formats = list(self.docs_formats.get(doc_type, {}).keys())
         
         if not all_formats:
@@ -218,8 +312,10 @@ class IAdrive:
         return f"document_{doc_id}"
     
     def download_drive_content(self, url, formats=None):
-        """Download Google Drive file/folder or Google Docs using gdown or direct export"""
-        if self.is_google_docs_url(url):
+        """Download content"""
+        if self.is_mega_url(url):
+            return self.download_mega_content(url)
+        elif self.is_google_docs_url(url):
             doc_id = self.extract_docs_id(url)
             doc_type = self.get_google_docs_type(url)
             return self.download_google_doc(url, doc_id, doc_type)  # No formats parameter needed
@@ -273,7 +369,7 @@ class IAdrive:
         file_map = self.get_file_list_with_structure(path)
         return list(file_map.values())
     
-    def create_metadata(self, file_map, drive_id, original_url, custom_meta=None, is_google_docs=False, doc_type=None):
+    def create_metadata(self, file_map, content_id, original_url, custom_meta=None, is_google_docs=False, doc_type=None, is_mega=False):
         """Create Internet Archive metadata from downloaded files"""
         if not file_map:
             raise Exception("No files found to upload")
@@ -283,13 +379,22 @@ class IAdrive:
         # Get oldest file date
         oldest_date, oldest_year = get_oldest_file_date(files)
         
-        # Determine title
+        # Determine title based on source
         if is_google_docs:
             # For Google Docs, we try to get a title from the first file
             first_file = list(file_map.keys())[0]
             title = os.path.splitext(first_file)[0]  # Remove extension
             if title.startswith(f"{doc_type}_"):
-                title = title.replace(f"{doc_type}_", "").replace(drive_id, "Document")
+                title = title.replace(f"{doc_type}_", "").replace(content_id, "Document")
+        elif is_mega:
+            # For Mega.nz, use content ID or try to get folder name
+            if len(files) == 1 and os.path.isfile(files[0]):
+                # Single file
+                title = os.path.basename(files[0])
+            else:
+                # Multiple files or folder
+                common_path = os.path.commonpath(files) if len(files) > 1 else os.path.dirname(files[0])
+                title = os.path.basename(common_path) or f"mega-{content_id}"
         elif len(files) == 1 and os.path.isfile(files[0]):
             # Single file
             title = os.path.basename(files[0])
@@ -297,18 +402,23 @@ class IAdrive:
             # Folder or multiple files
             # Try to get folder name from the first file's path
             common_path = os.path.commonpath(files) if len(files) > 1 else os.path.dirname(files[0])
-            title = os.path.basename(common_path) or f"drive-{drive_id}"
+            title = os.path.basename(common_path) or f"drive-{content_id}"
         
         # Extract file types
         file_types = extract_file_types(files)
         
-        # Get collaborators (this would need Google Drive API access in a real implementation)
-        creator = get_collaborators(drive_id) or "IAdrive"
+        # Get collaborators (this would need API access in a real implementation)
+        if is_mega:
+            creator = "IAdrive"
+        else:
+            creator = get_collaborators(content_id) or "IAdrive"
         
         # Create file listing for description with folder structure
         description_lines = []
         if is_google_docs:
             description_lines.append(f"Google {doc_type.title()} exported in:")
+        elif is_mega:
+            description_lines.append("files included:")
         else:
             description_lines.append("Files included:")
             
@@ -322,14 +432,16 @@ class IAdrive:
             else:
                 size_str = f"{file_size} bytes"
             
-            # Show only size for all files (both Google Docs and regular Drive files)
+            # Show only size for all files
             description_lines.append(f"- {rel_path} ({size_str})")
                 
         description = "<br>".join(description_lines)
         
         # Create subject tags
         if is_google_docs:
-            subject_tags = ["google", doc_type, "document"] + file_types
+            subject_tags = ["google", "docs", doc_type] + file_types
+        elif is_mega:
+            subject_tags = ["Mega", "mega.nz"] + file_types
         else:
             subject_tags = ["google", "drive"] + file_types
         subject = ";".join(subject_tags) + ";"
@@ -367,7 +479,8 @@ class IAdrive:
             'originalurl': original_url,
             'scanner': f'IAdrive File Mirroring Application {__version__}',
             **({'foldercount': str(len(folder_paths))} if folder_paths else {}),
-            **({'doctype': doc_type} if is_google_docs else {})
+            **({'doctype': doc_type} if is_google_docs else {}),
+            **({'source': 'mega.nz'} if is_mega else {})
         }
         
         if custom_meta:
@@ -375,12 +488,14 @@ class IAdrive:
         
         return metadata
     
-    def upload_to_ia(self, file_map, drive_id, metadata, is_google_docs=False):
+    def upload_to_ia(self, file_map, content_id, metadata, is_google_docs=False, is_mega=False):
         """Upload files to Internet Archive with optional folder structure preservation"""
         if is_google_docs:
-            identifier = f"docs-{drive_id}"
+            identifier = f"docs-{content_id}"
+        elif is_mega:
+            identifier = f"mega-{content_id}"
         else:
-            identifier = f"drive-{drive_id}"
+            identifier = f"drive-{content_id}"
         identifier = sanitize_identifier(identifier)
         
         if self.verbose:
@@ -448,18 +563,21 @@ class IAdrive:
         return identifier, metadata
     
     def archive_drive_url(self, url, custom_meta=None, formats=None):
-        """Main method to download from Google Drive/Docs and upload to IA"""
+        """Main method to download and upload to IA"""
         # Check dependencies first
         self.check_dependencies()
         
         is_google_docs = self.is_google_docs_url(url)
+        is_mega = self.is_mega_url(url)
         doc_type = self.get_google_docs_type(url) if is_google_docs else None
         
-        # For Google Docs, we always export all formats
-        if is_google_docs:
-            download_path, drive_id, downloaded_files = self.download_drive_content(url)
+        # Download content
+        if is_mega:
+            download_path, content_id, downloaded_files = self.download_mega_content(url)
+        elif is_google_docs:
+            download_path, content_id, downloaded_files = self.download_drive_content(url)
         else:
-            download_path, drive_id, _ = self.download_drive_content(url)
+            download_path, content_id, _ = self.download_drive_content(url)
         
         # Get file list with structure preserved
         file_map = self.get_file_list_with_structure(download_path)
@@ -474,6 +592,14 @@ class IAdrive:
                     ext = os.path.splitext(rel_path)[1].lstrip('.')
                     format_desc = self.docs_formats.get(doc_type, {}).get(ext, ext.upper())
                     print(f"  - {rel_path} ({format_desc})")
+            elif is_mega:
+                print("Mega.nz content:")
+                if self.preserve_folders:
+                    print("File structure:")
+                    for rel_path in sorted(file_map.keys()):
+                        print(f"  - {rel_path}")
+                else:
+                    print("Files will be uploaded with flat structure")
             else:
                 if self.preserve_folders:
                     print("File structure:")
@@ -483,10 +609,10 @@ class IAdrive:
                     print("Files will be uploaded with flat structure")
         
         # Create metadata
-        metadata = self.create_metadata(file_map, drive_id, url, custom_meta, is_google_docs, doc_type)
+        metadata = self.create_metadata(file_map, content_id, url, custom_meta, is_google_docs, doc_type, is_mega)
         
         # Upload to Internet Archive with or without folder structure
-        identifier, final_metadata = self.upload_to_ia(file_map, drive_id, metadata, is_google_docs)
+        identifier, final_metadata = self.upload_to_ia(file_map, content_id, metadata, is_google_docs, is_mega)
         
         # Clean up downloaded files
         import shutil

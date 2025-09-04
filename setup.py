@@ -15,13 +15,13 @@ setup(
     name="iadrive",
     version=get_version(),
     author="Andres99",
-    description="Download Google Drive files/folders and upload them to the Internet Archive",
+    description="Download files/folders from multiple sites and upload them to the Internet Archive",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/Andres9890/iadrive",
     packages=find_packages(),
     classifiers=[
-        "Development Status :: 4 - Beta",
+        "Development Status :: 5 - Production/Stable",
         "Intended Audience :: End Users/Desktop",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
@@ -37,6 +37,7 @@ setup(
         "gdown>=5.2.0",
         "docopt-ng>=0.9.0",
         "python-dateutil>=2.9.0.post0",
+        "mega.py>=1.0.8",
     ],
     entry_points={
         "console_scripts": [

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "iadrive"
 dynamic = ["version"]
-description = "Download Google Drive files/folders and upload them to the Internet Archive"
+description = "Download files/folders from multiple sites and upload them to the Internet Archive"
 authors = [
     {name = "Andres99"}
 ]
@@ -17,11 +17,14 @@ dependencies = [
     "gdown>=5.2.0",
     "docopt-ng>=0.9.0",
     "python-dateutil>=2.9.0.post0",
+    "mega.py>=1.0.8",
 ]
 keywords = [
     "archive.org",
     "archiving", 
     "google drive",
+    "google docs",
+    "mega.nz",
     "internet archive",
     "file mirroring",
 ]

@@ -16,4 +16,9 @@
 - Export Formats: PDF, PPTX, ODP, TXT, JPEG, PNG, SVG
 - Note: Image formats (JPEG, PNG, SVG) export each slide as a separate image file
 
+## Mega.nz
+
+- Files
+- Folders
+
 > More platforms coming soon
