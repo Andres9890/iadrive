@@ -33,7 +33,7 @@ jobs:
     - name: Install iadrive and IA CLI
       run: |
         python -m pip install --upgrade pip
-        pip install iadrive
+        pip install .
 
     - name: Configure IA CLI
       env:
