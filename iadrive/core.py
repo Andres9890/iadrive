@@ -5,6 +5,10 @@ import time
 import logging
 import subprocess
 import internetarchive
+try:
+    import gdown  # type: ignore
+except ImportError:  # pragma: no cover - handled in check_dependencies
+    gdown = None  # type: ignore
 import urllib.request
 import urllib.error
 from datetime import datetime
@@ -68,12 +72,9 @@ class IAdrive:
     
     def check_dependencies(self):
         """Check if required dependencies are installed and configured"""
-        try:
-            import gdown
-            import internetarchive
-        except ImportError as e:
-            raise Exception(f"Missing required package: {e}. Run 'pip install -r requirements.txt'")
-        
+        if gdown is None:
+            raise Exception("Missing required package: No module named 'gdown'. Run 'pip install -r requirements.txt'")
+
         # Check if internetarchive is configured
         try:
             ia_config = internetarchive.get_session().config
@@ -321,11 +322,9 @@ class IAdrive:
             return self.download_google_doc(url, doc_id, doc_type)  # No formats parameter needed
         else:
             # Handle regular Google Drive files/folders
-            import gdown
-            
             drive_id = self.extract_drive_id(url)
             download_path = os.path.join(self.dir_path, f"drive-{drive_id}")
-            
+
             if self.verbose:
                 print(f"Downloading from: {url}")
                 print(f"Download path: {download_path}")
@@ -348,13 +347,22 @@ class IAdrive:
         """
         file_map = {}
         
+        def is_partial_file(filename):
+            """Return True if the filename represents an incomplete download."""
+            return filename.lower().endswith('.part')
+
         if os.path.isfile(path):
             # Single file case
-            file_map[os.path.basename(path)] = path
+            filename = os.path.basename(path)
+            if is_partial_file(filename):
+                return {}
+            file_map[filename] = path
         else:
             # Directory case - walk through and preserve structure
             for root, dirs, filenames in os.walk(path):
                 for filename in filenames:
+                    if is_partial_file(filename):
+                        continue
                     abs_path = os.path.join(root, filename)
                     # Get relative path from the download directory
                     rel_path = os.path.relpath(abs_path, path)
@@ -513,12 +521,24 @@ class IAdrive:
                 print(f"Item {identifier} already exists on archive.org")
             return identifier, metadata
         
+        # Remove incomplete download artifacts before upload
+        cleaned_file_map = {}
+        for rel_path, abs_path in file_map.items():
+            if abs_path.lower().endswith('.part'):
+                if self.verbose:
+                    print(f"  Skipping partial file: {abs_path}")
+                continue
+            cleaned_file_map[rel_path] = abs_path
+
+        if not cleaned_file_map:
+            raise Exception("No files found to upload")
+
         # Prepare files for upload
         upload_files = {}
-        
+
         if self.preserve_folders:
             # Preserve folder structure
-            for rel_path, abs_path in file_map.items():
+            for rel_path, abs_path in cleaned_file_map.items():
                 # Sanitize the relative path for IA (replace problematic characters)
                 # But keep the folder structure with forward slashes
                 safe_rel_path = rel_path.replace('\\', '/')
@@ -531,9 +551,9 @@ class IAdrive:
         else:
             # Flat structure - use only filenames, handle duplicates
             filename_counts = {}
-            for rel_path, abs_path in file_map.items():
+            for rel_path, abs_path in cleaned_file_map.items():
                 filename = os.path.basename(abs_path)
-                
+
                 # Handle duplicate filenames by adding a counter
                 if filename in filename_counts:
                     filename_counts[filename] += 1

@@ -3,7 +3,6 @@ import os
 import shutil
 import json
 import time
-import requests_mock
 import tempfile
 import logging
 from unittest.mock import patch, MagicMock, mock_open
@@ -283,21 +282,37 @@ class IAdriveMockTests(unittest.TestCase):
         test_doc_path = os.path.join(self.test_dir, 'Test Document.pdf')
         with open(test_doc_path, 'w') as f:
             f.write('test pdf content')
-        
+
         file_map = {'Test Document.pdf': test_doc_path}
         drive_id = 'test123'
         url = 'https://docs.google.com/document/d/test123/edit'
-        
+
         metadata = self.iadrive.create_metadata(
             file_map, drive_id, url, None, is_google_docs=True, doc_type='document'
         )
-        
+
         self.assertEqual(metadata['title'], 'Test Document')
         self.assertEqual(metadata['mediatype'], 'texts')
         self.assertEqual(metadata['collection'], 'opensource_media')
         self.assertEqual(metadata['doctype'], 'document')
         self.assertIn('document', metadata['subject'])
         self.assertIn('Google Document exported', metadata['description'])
+
+    def test_get_file_list_with_structure_skips_part_files(self):
+        """Ensure partial download artifacts are excluded from file map"""
+        complete_file = os.path.join(self.test_dir, 'complete.txt')
+        part_file = os.path.join(self.test_dir, 'incomplete.zip.part')
+
+        with open(complete_file, 'w') as f:
+            f.write('complete')
+
+        with open(part_file, 'w') as f:
+            f.write('partial')
+
+        file_map = self.iadrive.get_file_list_with_structure(self.test_dir)
+
+        self.assertIn('complete.txt', file_map)
+        self.assertNotIn('incomplete.zip.part', file_map)
 
     @patch('iadrive.core.internetarchive')
     def test_upload_to_ia_google_docs(self, mock_ia):
@@ -315,14 +330,48 @@ class IAdriveMockTests(unittest.TestCase):
         file_map = {'test.pdf': test_file}
         drive_id = 'test123'
         metadata = {'title': 'Test Doc', 'mediatype': 'texts'}
-        
+
         identifier, result_metadata = self.iadrive.upload_to_ia(
             file_map, drive_id, metadata, is_google_docs=True
         )
-        
+
         self.assertEqual(identifier, 'docs-test123')  # docs- prefix for Google Docs
         self.assertEqual(result_metadata, metadata)
         mock_item.upload.assert_called_once()
+
+    @patch('iadrive.core.internetarchive')
+    def test_upload_to_ia_skips_part_files(self, mock_ia):
+        """Ensure upload process ignores partial download artifacts"""
+        mock_item = MagicMock()
+        mock_item.exists = False
+        mock_ia.get_item.return_value = mock_item
+
+        complete_file = os.path.join(self.test_dir, 'complete.txt')
+        part_file = os.path.join(self.test_dir, 'incomplete.zip.part')
+
+        with open(complete_file, 'w') as f:
+            f.write('complete')
+
+        with open(part_file, 'w') as f:
+            f.write('partial')
+
+        file_map = {
+            'complete.txt': complete_file,
+            'incomplete.zip.part': part_file,
+        }
+
+        metadata = {'title': 'Test', 'mediatype': 'texts'}
+
+        identifier, result_metadata = self.iadrive.upload_to_ia(
+            file_map, 'test123', metadata
+        )
+
+        self.assertEqual(identifier, 'drive-test123')
+        self.assertEqual(result_metadata, metadata)
+
+        uploaded_files = mock_item.upload.call_args[0][0]
+        self.assertIn('complete.txt', uploaded_files)
+        self.assertNotIn('incomplete.zip.part', uploaded_files)
 
     @patch('iadrive.core.gdown', MockGdown)
     def test_download_drive_content_file(self):
