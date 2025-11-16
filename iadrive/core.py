@@ -20,22 +20,24 @@ from iadrive import __version__
 
 
 class IAdrive:
-    def __init__(self, verbose=False, dir_path='~/.iadrive', preserve_folders=True):
+    def __init__(self, verbose=False, dir_path='~/.iadrive', preserve_folders=True, google_drive_token=None):
         """
         IAdrive - Google Drive and Mega.nz to Internet Archive uploader
-        
+
         :param verbose: Print detailed logs
         :param dir_path: Directory to store downloaded files
         :param preserve_folders: Whether to preserve folder structure in uploaded files
+        :param google_drive_token: Google Drive API token for fetching file metadata (owner/modifier)
         """
         self.verbose = verbose
         self.preserve_folders = preserve_folders
+        self.google_drive_token = google_drive_token
         self.logger = logging.getLogger(__name__)
         self.dir_path = os.path.expanduser(dir_path)
-        
+
         # Create download directory
         os.makedirs(self.dir_path, exist_ok=True)
-        
+
         if not verbose:
             self.logger.setLevel(logging.ERROR)
         
@@ -310,7 +312,7 @@ class IAdrive:
             pass
         
         # Fallback to document ID
-        return f"document_{doc_id}"
+        return f"Google Docs - {doc_id}"
     
     def download_drive_content(self, url, formats=None):
         """Download content"""
@@ -402,7 +404,7 @@ class IAdrive:
             else:
                 # Multiple files or folder
                 common_path = os.path.commonpath(files) if len(files) > 1 else os.path.dirname(files[0])
-                title = os.path.basename(common_path) or f"mega-{content_id}"
+                title = os.path.basename(common_path) or f"Mega.nz - {content_id}"
         elif len(files) == 1 and os.path.isfile(files[0]):
             # Single file
             title = os.path.basename(files[0])
@@ -410,7 +412,7 @@ class IAdrive:
             # Folder or multiple files
             # Try to get folder name from the first file's path
             common_path = os.path.commonpath(files) if len(files) > 1 else os.path.dirname(files[0])
-            title = os.path.basename(common_path) or f"drive-{content_id}"
+            title = os.path.basename(common_path) or f"Google Drive - {content_id}"
         
         # Extract file types
         file_types = extract_file_types(files)
@@ -419,7 +421,7 @@ class IAdrive:
         if is_mega:
             creator = "IAdrive"
         else:
-            creator = get_collaborators(content_id) or "IAdrive"
+            creator = get_collaborators(content_id, self.google_drive_token) or "IAdrive"
         
         # Create file listing for description with folder structure
         description_lines = []

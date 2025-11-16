@@ -25,7 +25,8 @@ IAdrive is a tool for archiving Google Drive files/folders and Google Docs/Sheet
 - Supports quiet mode (`--quiet`) and debug mode (`--debug`) for log output
 - Automatically cleans up downloaded files after upload
 - Sanitizes identifiers and truncates subject tags to fit Archive.org requirements
-- Falls back to "IAdrive" as publisher since Google Drive collaborators fetching is not yet implemented
+- Fetch file owner/last modifier as creator metadata using `--gdrive-token`
+- When unable to determine a folder name, uses format `{platform} - {id}` (e.g., "Google Drive - 1dEuZpztEZqL3PZPIaFh9i4EjBmcEruHh")
 - Improved error handling and debug output
 
 ## Installation
@@ -46,15 +47,10 @@ ia configure
 
 You're gonna be prompted to enter your IA account's email and password
 
-Optional envs:
-
-- `GOOGLE_API_KEY` – if set, the tool attempts to look up the owner names of
-  the Google Drive file or folder for the `creator` field in metadata (not yet implemented)
-
 ## Usage
 
 ```bash
-iadrive <url> [--metadata=<key:value>...] [--disable-slash-files] [--quiet] [--debug]
+iadrive <url> [--metadata=<key:value>...] [--disable-slash-files] [--gdrive-token=<token>] [--quiet] [--debug]
 ```
 
 Arguments:
@@ -65,6 +61,7 @@ Options:
 
 - `--metadata=<key:value>` – custom metadata to add to the IA item
 - `--disable-slash-files` – upload files without preserving folder structure
+- `--gdrive-token=<token>` – Google Drive API OAuth2 access token for fetching file owner/modifier as creator metadata
 - `--quiet` – only print errors
 - `--debug` – print all logs to stdout
 
@@ -137,6 +134,9 @@ iadrive https://drive.google.com/drive/folders/placeholder --metadata=collection
 # Upload with flat structure
 iadrive https://drive.google.com/drive/folders/placeholder --disable-slash-files
 
+# Upload with file owner/modifier as creator metadata
+iadrive https://drive.google.com/drive/folders/placeholder --gdrive-token=ya29.a0AfH6SMBx...
+
 # Debug mode with custom metadata
 iadrive https://drive.google.com/drive/folders/placeholder --metadata=collection:placeholder \
         --metadata=mediatype:data --debug
@@ -186,16 +186,40 @@ Note: When using flat structure, duplicate filenames are automatically handled b
 
 ### Common Steps
 - Identifiers are sanitized and subject tags are truncated to fit Archive.org requirements
-- Publisher defaults to "IAdrive" since collaborator fetching is not yet implemented
+- Publisher/creator defaults to "IAdrive" unless `--gdrive-token` is provided to fetch file owner/modifier
 - Folder structure is preserved by default (can be disabled with `--disable-slash-files`)
 - Downloaded files are automatically cleaned up after upload
 - Errors are handled gracefully, and debug output is available with `--debug`
+- If a folder name or title cannot be determined, falls back to format `{platform} - {id}`
 
 ## Supported Platforms
 
 For a list of supported platforms for archiving, please see [`SUPPORTEDPLATFORMS.md`](SUPPORTEDPLATFORMS.md)
 
+## Google Drive API Token
+
+To fetch file owner and last modifier information as creator metadata, you can provide a Google Drive API OAuth2 access token using the `--gdrive-token` option:
+
+```bash
+iadrive <url> --gdrive-token=ya29.a0AfH6SMBx...
+```
+
+The token is used to call the Google Drive API v3 to retrieve:
+- File owner information (name or email)
+- Last modifying user (if owner is unavailable)
+
+This information is then used to populate the `creator` field in the Internet Archive metadata instead of the default "IAdrive".
+
+### Getting a Google Drive API Token
+
+1. Create a project in [Google Cloud Console](https://console.cloud.google.com/)
+2. Enable the Google Drive API
+3. Create OAuth2 credentials
+4. Generate an access token using OAuth2 flow
+5. Pass the access token to iadrive using `--gdrive-token`
+
+Note: Access tokens are typically short-lived. For production use, you may want to implement a refresh token mechanism.
+
 ## To-do list
 
-- Google Drive collaborator fetching to use as creator metadata through the Google API
 - Batch processing

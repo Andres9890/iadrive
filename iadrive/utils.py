@@ -67,15 +67,56 @@ def extract_file_types(files):
     return sorted(list(extensions))
 
 
-def get_collaborators(drive_id):
+def get_collaborators(drive_id, google_drive_token=None):
     """
     Get collaborators for a Google Drive file/folder
-    Note: This would require Google Drive API access in a real implementation
-    For now, returns None to fall back to "IAdrive"
+    Uses Google Drive API v3 to fetch file owner and last modifier information
+
+    :param drive_id: The Google Drive file/folder ID
+    :param google_drive_token: Google Drive API access token (OAuth2)
+    :return: Creator information (owner or last modifier name), or None if unavailable
     """
-    # TODO: Implement Google Drive API integration to get collaborators
-    # This would require OAuth2 setup and drive API calls
-    return None
+    if not google_drive_token or not drive_id:
+        return None
+
+    try:
+        import urllib.request
+        import json
+
+        # Google Drive API v3 endpoint to get file metadata
+        # We request owner and lastModifyingUser information
+        api_url = f"https://www.googleapis.com/drive/v3/files/{drive_id}"
+        params = "?fields=owners,lastModifyingUser"
+
+        # Create request with authorization header
+        request = urllib.request.Request(
+            api_url + params,
+            headers={'Authorization': f'Bearer {google_drive_token}'}
+        )
+
+        # Make the API call
+        response = urllib.request.urlopen(request, timeout=10)
+        data = json.loads(response.read().decode('utf-8'))
+
+        # Try to get the owner first, then fall back to last modifier
+        creator = None
+
+        # Get owner information
+        if 'owners' in data and len(data['owners']) > 0:
+            owner = data['owners'][0]
+            # Prefer displayName, fall back to emailAddress
+            creator = owner.get('displayName') or owner.get('emailAddress')
+
+        # If no owner, try last modifying user
+        if not creator and 'lastModifyingUser' in data:
+            modifier = data['lastModifyingUser']
+            creator = modifier.get('displayName') or modifier.get('emailAddress')
+
+        return creator
+
+    except Exception as e:
+        # If API call fails, return None to fall back to "IAdrive"
+        return None
 
 
 def get_latest_pypi_version(package_name="iadrive"):

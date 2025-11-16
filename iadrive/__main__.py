@@ -3,7 +3,7 @@
 """IAdrive - Download Google Drive files/folders, Google Docs, and Mega.nz files and upload to Internet Archive
 
 Usage:
-  iadrive <url> [--metadata=<key:value>...] [--disable-slash-files] [--quiet] [--debug]
+  iadrive <url> [--metadata=<key:value>...] [--disable-slash-files] [--gdrive-token=<token>] [--quiet] [--debug]
   iadrive -h | --help
   iadrive --version
 
@@ -14,6 +14,7 @@ Options:
   -h --help                    Show this screen
   --metadata=<key:value>       Custom metadata to add to the archive.org item
   --disable-slash-files        Upload files without preserving folder structure
+  --gdrive-token=<token>       Google Drive API token for fetching file metadata (owner/modifier)
   -q --quiet                   Just print errors
   -d --debug                   Print all logs to stdout
 
@@ -70,6 +71,7 @@ def main():
     quiet_mode = args['--quiet']
     debug_mode = args['--debug']
     disable_slash_files = args['--disable-slash-files']
+    gdrive_token = args['--gdrive-token']
     
     if debug_mode:
         root = logging.getLogger()
@@ -102,7 +104,7 @@ def main():
         
         print()
     
-    iadrive = IAdrive(verbose=not quiet_mode, preserve_folders=not disable_slash_files)
+    iadrive = IAdrive(verbose=not quiet_mode, preserve_folders=not disable_slash_files, google_drive_token=gdrive_token)
     
     try:
         identifier, meta = iadrive.archive_drive_url(url, metadata)
